@@ -129,16 +129,16 @@
             <div class="form-group">
                 <label>Defect Coordinates (Auto-Captured)</label>
                 <div style="display: flex; gap: 8px;">
-                    <input type="text" id="lat" name="lat" placeholder="Latitude" required readonly>
-                    <input type="text" id="lng" name="lng" placeholder="Longitude" required readonly>
+                    <input type="text" id="lat" placeholder="Latitude" required readonly>
+                    <input type="text" id="lng" placeholder="Longitude" required readonly>
                 </div>
-                <button type="button" class="btn-gps" onclick="fetchGPS()">📍 Refresh Accurate GPS</button>
+                <button type="button" class="btn-gps" onclick="fetchGPS()">📍 Refresh GPS Location</button>
             </div>
 
             <!-- Hazard Severity -->
             <div class="form-group">
-                <label>Estimated Severity</label>
-                <select id="severity" name="severity">
+                <label>Estimated Hazard Level</label>
+                <select id="severity">
                     <option value="high">Critical (Deep pothole / Immediate hazard)</option>
                     <option value="medium" selected>Medium (Moderate cavity / Surface erosion)</option>
                     <option value="low">Low (Minor asphalt raveling / Crack)</option>
@@ -147,10 +147,10 @@
 
             <!-- Optional Camera Capture -->
             <div class="form-group">
-                <label>Attach Photo (Optional)</label>
+                <label>Attach Defect Photo (Optional)</label>
                 <div class="photo-upload-zone" onclick="document.getElementById('photoInput').click()">
                     <span id="photoStatusText" style="font-size: 0.8rem; color: var(--accent-cyan);">📸 Take Photo / Upload Image</span>
-                    <input type="file" id="photoInput" name="photo" accept="image/*" capture="environment" style="display: none;" onchange="handlePhotoSelect(event)">
+                    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display: none;" onchange="handlePhotoSelect(event)">
                     <img id="photoPreview" class="photo-preview" alt="Captured Defect Preview">
                 </div>
             </div>
@@ -158,7 +158,7 @@
             <!-- Notes -->
             <div class="form-group">
                 <label>Description / Landmark (Optional)</label>
-                <textarea id="description" name="description" rows="2" placeholder="e.g., Near Kattankulathur gate 2, left side lane..."></textarea>
+                <textarea id="description" rows="2" placeholder="e.g., Near Kattankulathur gate 2, left side lane..."></textarea>
             </div>
 
             <button type="submit" class="btn-submit" id="submitBtn">Dispatch Grievance to PWD</button>
@@ -172,6 +172,8 @@
     </div>
 
     <script>
+        let photoBase64 = null;
+
         function fetchGPS() {
             if (!navigator.geolocation) {
                 return alert("Geolocation is not supported by your browser.");
@@ -182,7 +184,7 @@
                     document.getElementById('lng').value = pos.coords.longitude.toFixed(5);
                 },
                 (err) => {
-                    // Fallback to demo Kattankulathur sector coords if denied on desktop
+                    // Fallback to sector demo coords
                     document.getElementById('lat').value = (12.8231 + (Math.random() - 0.5) * 0.005).toFixed(5);
                     document.getElementById('lng').value = (80.0451 + (Math.random() - 0.5) * 0.005).toFixed(5);
                 },
@@ -197,8 +199,9 @@
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
+                    photoBase64 = event.target.result;
                     const preview = document.getElementById('photoPreview');
-                    preview.src = event.target.result;
+                    preview.src = photoBase64;
                     preview.style.display = 'block';
                     document.getElementById('photoStatusText').innerText = `✅ Photo Attached (${file.name})`;
                 };
@@ -211,7 +214,13 @@
             const submitBtn = document.getElementById('submitBtn');
             const alertBox = document.getElementById('alertBox');
 
-            const formData = new FormData(e.target);
+            const payload = {
+                lat: parseFloat(document.getElementById('lat').value),
+                lng: parseFloat(document.getElementById('lng').value),
+                severity: document.getElementById('severity').value,
+                description: document.getElementById('description').value || "Citizen reported defect",
+                photo_base64: photoBase64
+            };
 
             submitBtn.disabled = true;
             submitBtn.innerText = "Dispatching to AIKYA Portal...";
@@ -219,7 +228,8 @@
             try {
                 const res = await fetch("/api/report", {
                     method: "POST",
-                    body: formData
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
 
@@ -230,6 +240,7 @@
                 document.getElementById('reportForm').reset();
                 document.getElementById('photoPreview').style.display = 'none';
                 document.getElementById('photoStatusText').innerText = "📸 Take Photo / Upload Image";
+                photoBase64 = null;
                 fetchGPS();
             } catch (err) {
                 alertBox.className = "alert-box alert-error";

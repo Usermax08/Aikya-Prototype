@@ -3,7 +3,7 @@ import sys
 import datetime
 from typing import List, Optional
 
-from fastapi import FastAPI, Depends, BackgroundTasks, Form, File, UploadFile
+from fastapi import FastAPI, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -40,6 +40,13 @@ class TelemetryPayload(BaseModel):
     speed_kmh: float
     z_raw: List[float]
 
+class CitizenReportPayload(BaseModel):
+    lat: float
+    lng: float
+    severity: str = "medium"
+    description: Optional[str] = "Citizen reported defect"
+    photo_base64: Optional[str] = None
+
 @app.post("/api/telemetry")
 async def receive_telemetry(payload: TelemetryPayload, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     cutoff_freq = 5.0
@@ -72,20 +79,13 @@ async def receive_telemetry(payload: TelemetryPayload, background_tasks: Backgro
     }
 
 @app.post("/api/report")
-async def create_citizen_report(
-    lat: float = Form(...),
-    lng: float = Form(...),
-    severity: str = Form("medium"),
-    description: Optional[str] = Form("Citizen reported defect"),
-    photo: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db)
-):
+def create_citizen_report(payload: CitizenReportPayload, db: Session = Depends(get_db)):
     now = datetime.datetime.now(datetime.timezone.utc)
     new_pothole = Pothole(
-        lat=lat,
-        lng=lng,
+        lat=payload.lat,
+        lng=payload.lng,
         hit_count=1,
-        severity=severity.lower(),
+        severity=payload.severity.lower(),
         status="verified",
         first_seen=now,
         last_seen=now,
@@ -97,7 +97,7 @@ async def create_citizen_report(
     return {
         "status": "success",
         "id": new_pothole.id,
-        "has_photo": photo is not None and photo.filename != "",
+        "has_photo": bool(payload.photo_base64),
         "message": f"Defect logged as Ticket #{new_pothole.id}."
     }
 
