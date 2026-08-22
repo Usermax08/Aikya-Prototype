@@ -1,62 +1,50 @@
 import datetime
 import random
-from models import SessionLocal, init_db, Hit, Pothole
+from sqlalchemy.orm import Session
+from backend.models import SessionLocal, init_db, Pothole, Hit
 
-init_db()
-db = SessionLocal()
+def seed_demo_data():
+    init_db()
+    db: Session = SessionLocal()
 
-# Base coordinates centered around SRM Kattankulathur corridor
-BASE_LAT = 12.8231
-BASE_LNG = 80.0451
-
-def seed_database():
     db.query(Hit).delete()
     db.query(Pothole).delete()
     db.commit()
 
-    print("Populating initial realistic defect clusters...")
+    # SRMIST Kattankulathur Campus Base
+    base_lat, base_lng = 12.8231, 80.0451
 
-    severities = ["low", "medium", "high"]
-    statuses = ["verified", "verified", "verified", "resolved"]
+    campus_defects = [
+        {"offset": (0.0008, 0.0012), "hits": 14, "severity": "high", "status": "verified"},
+        {"offset": (-0.0012, 0.0018), "hits": 8, "severity": "medium", "status": "verified"},
+        {"offset": (0.0019, -0.0009), "hits": 4, "severity": "low", "status": "verified"},
+        {"offset": (-0.0021, -0.0015), "hits": 18, "severity": "high", "status": "verified"},
+        {"offset": (0.0005, -0.0022), "hits": 6, "severity": "medium", "status": "verified"},
+        {"offset": (-0.0015, 0.0008), "hits": 11, "severity": "high", "status": "resolved"},
+        {"offset": (0.0024, 0.0021), "hits": 5, "severity": "low", "status": "resolved"},
+    ]
 
-    for i in range(1, 17):
-        offset_lat = (random.random() - 0.5) * 0.03
-        offset_lng = (random.random() - 0.5) * 0.03
-        p_lat = round(BASE_LAT + offset_lat, 6)
-        p_lng = round(BASE_LNG + offset_lng, 6)
-        
-        hit_count = random.randint(3, 14)
-        sev = random.choice(severities)
-        stat = random.choice(statuses)
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    for p_data in campus_defects:
+        p_lat = base_lat + p_data["offset"][0]
+        p_lng = base_lng + p_data["offset"][1]
 
         pothole = Pothole(
             lat=p_lat,
             lng=p_lng,
-            hit_count=hit_count,
-            severity=sev,
-            status=stat,
-            first_seen=datetime.datetime.utcnow() - datetime.timedelta(hours=random.randint(2, 48)),
-            last_seen=datetime.datetime.utcnow()
+            hit_count=p_data["hits"],
+            severity=p_data["severity"],
+            status=p_data["status"],
+            first_seen=now - datetime.timedelta(hours=random.randint(4, 72)),
+            last_seen=now,
+            smooth_pass_count=3 if p_data["status"] == "resolved" else 0
         )
         db.add(pothole)
 
-        for _ in range(hit_count):
-            jitter_lat = p_lat + (random.random() - 0.5) * 0.00003
-            jitter_lng = p_lng + (random.random() - 0.5) * 0.00003
-            max_accel = 14.0 if sev == "low" else (17.5 if sev == "medium" else 22.0)
-            
-            db.add(Hit(
-                device_id=f"vehicle_{random.randint(100, 999)}",
-                lat=round(jitter_lat, 6),
-                lng=round(jitter_lng, 6),
-                z_accel=round(max_accel + (random.random() - 0.5) * 2.0, 2),
-                speed_kmh=round(random.uniform(25.0, 55.0), 1),
-                is_spike=True
-            ))
-
     db.commit()
     db.close()
-    print("Database seeded with 16 verified defects and raw sensor hits!")
+    print("SRMIST Defect clusters successfully seeded!")
 
 if __name__ == "__main__":
-    seed_database()
+    seed_demo_data()
