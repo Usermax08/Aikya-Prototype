@@ -1,6 +1,12 @@
 import os
+import sys
 import datetime
 from typing import List, Optional
+
+# Force Python to find modules inside the backend directory
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from fastapi import FastAPI, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -8,14 +14,9 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-try:
-    from backend.models import SessionLocal, init_db, Hit, Pothole
-    from backend.filters import butterworth_filter
-    from backend.cluster import cluster_hits, check_smooth_pass_resolution
-except ImportError:
-    from models import SessionLocal, init_db, Hit, Pothole
-    from filters import butterworth_filter
-    from cluster import cluster_hits, check_smooth_pass_resolution
+from models import SessionLocal, init_db, Hit, Pothole
+from filters import butterworth_filter
+from cluster import cluster_hits, check_smooth_pass_resolution
 
 init_db()
 
