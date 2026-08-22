@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AIKYA - Municipal Pothole & Defect Command Center</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-panel: #111827;
+            --bg-card: #1f2937;
+            --border-color: #374151;
+            --accent-blue: #0284c7;
+            --accent-cyan: #38bdf8;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+        }
+
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: flex; height: 100vh; background: var(--bg-base); color: var(--text-main); overflow: hidden; }
+        
+        #sidebar { width: 380px; background: var(--bg-panel); padding: 20px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; z-index: 1000; box-shadow: 4px 0 24px rgba(0,0,0,0.4); }
+        #map { flex: 1; height: 100%; }
+
+        .header-title { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--accent-blue); padding-bottom: 12px; margin-bottom: 16px; }
+        .header-title h1 { font-size: 1.2rem; margin: 0; color: var(--accent-cyan); font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; }
+        .live-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; display: inline-block; box-shadow: 0 0 8px var(--success); }
+
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+        .stat-card { background: var(--bg-card); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--border-color); position: relative; overflow: hidden; }
+        .stat-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--accent-blue); }
+        .stat-card.resolved-card::before { background: var(--success); }
+        .stat-val { font-size: 1.6rem; font-weight: 800; color: var(--text-main); font-family: monospace; }
+        .stat-lbl { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-top: 4px; letter-spacing: 0.5px; }
+
+        .route-info-card {
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            color: #ffffff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 14px;
+            font-size: 0.8rem;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+        }
+
+        .filter-tabs { display: flex; gap: 4px; margin-bottom: 12px; background: var(--bg-base); padding: 3px; border-radius: 6px; border: 1px solid var(--border-color); }
+        .filter-btn { flex: 1; background: transparent; border: none; color: var(--text-muted); padding: 6px 2px; font-size: 0.72rem; font-weight: 600; border-radius: 4px; cursor: pointer; transition: 0.2s; text-align: center; }
+        .filter-btn.active { background: var(--accent-blue); color: white; }
+        .filter-btn:hover:not(.active) { color: var(--text-main); }
+
+        .ticket-list { flex: 1; overflow-y: auto; padding-right: 4px; }
+        .ticket-list::-webkit-scrollbar { width: 4px; }
+        .ticket-list::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+
+        .ticket { 
+            background: var(--bg-card); 
+            border-left: 4px solid var(--text-muted); 
+            border-radius: 6px; 
+            padding: 12px; 
+            margin-bottom: 10px; 
+            font-size: 0.82rem; 
+            cursor: pointer; 
+            border-top: 1px solid rgba(255,255,255,0.03);
+            border-right: 1px solid rgba(255,255,255,0.03);
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+        .ticket:hover {
+            transform: translateY(-2px);
+            background: #283548;
+        }
+        .ticket.high { border-left-color: var(--danger); }
+        .ticket.medium { border-left-color: var(--warning); }
+        .ticket.low { border-left-color: var(--accent-cyan); }
+        .ticket.resolved { border-left-color: var(--success); opacity: 0.65; }
+        
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; float: right; }
+        .badge-verified { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-resolved { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+        .actions-bar { padding-top: 12px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; }
+        .btn-action { width: 100%; background: #1f2937; border: 1px solid var(--border-color); color: var(--text-main); padding: 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; }
+        .btn-action:hover { background: #374151; }
+
+        .btn-route { display: block; width: 100%; background: var(--accent-blue); color: white; border: none; padding: 7px 10px; border-radius: 4px; margin-top: 6px; font-weight: bold; font-size: 0.75rem; cursor: pointer; text-align: center; text-decoration: none; }
+        .btn-route:hover { background: #0369a1; }
+        .btn-playbook { background: #4f46e5; }
+        .btn-playbook:hover { background: #4338ca; }
+        .btn-gmaps { background: #059669; }
+        .btn-gmaps:hover { background: #047857; }
+
+        .leaflet-control-layers { background: var(--bg-panel) !important; color: var(--text-main) !important; border: 1px solid var(--border-color) !important; border-radius: 8px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; }
+        .leaflet-control-layers-base label { color: var(--text-main) !important; font-size: 0.8rem; }
+
+        /* Incident Playbook Modal UI */
+        #playbookModal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(3, 7, 18, 0.85);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: #111827;
+            width: 90%;
+            max-width: 680px;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            color: #f3f4f6;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #374151; padding-bottom: 12px; margin-bottom: 16px; }
+        .modal-header h2 { margin: 0; font-size: 1.15rem; color: #38bdf8; }
+        .close-modal { background: none; border: none; font-size: 1.4rem; color: #9ca3af; cursor: pointer; }
+        .sop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .sop-card { background: #1f2937; padding: 12px; border-radius: 6px; border-left: 3px solid #0284c7; }
+        .sop-label { font-size: 0.68rem; color: #9ca3af; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+        .sop-value { font-size: 0.88rem; font-weight: 600; color: #f3f4f6; }
+        .checklist-box { background: #1f2937; padding: 14px; border-radius: 6px; margin-bottom: 16px; }
+        .checklist-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; margin-bottom: 8px; color: #e5e7eb; }
+        .checklist-item input { accent-color: #0284c7; }
+
+        /* PRINT STYLING: Converts into a formal PWD Government Dispatch Manifest */
+        @media print {
+            body * { visibility: hidden !important; }
+            #playbookModal, #playbookModal * { visibility: visible !important; }
+            #playbookModal {
+                position: absolute !important;
+                left: 0 !important; top: 0 !important;
+                width: 100% !important; height: auto !important;
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+                display: block !important;
+            }
+            .modal-content {
+                background: white !important;
+                color: black !important;
+                border: 2px solid #000 !important;
+                box-shadow: none !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 24px !important;
+            }
+            .close-modal, .no-print { display: none !important; }
+            .modal-header h2 { color: #000 !important; font-size: 1.4rem !important; }
+            .sop-card, .checklist-box {
+                background: #f8fafc !important;
+                color: #000 !important;
+                border: 1px solid #cbd5e1 !important;
+                border-left: 4px solid #0284c7 !important;
+            }
+            .sop-label { color: #475569 !important; }
+            .sop-value, .checklist-item { color: #000 !important; }
+            .print-only { display: block !important; }
+        }
+        .print-only { display: none; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div class="header-title">
+            <h1><span class="live-dot"></span> AIKYA PWD Portal</h1>
+            <span style="font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">SRMIST NODE</span>
+        </div>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div id="totalDefects" class="stat-val">0</div>
+                <div class="stat-lbl">Active Potholes</div>
+            </div>
+            <div class="stat-card resolved-card">
+                <div id="resolvedCount" class="stat-val" style="color:var(--success)">0</div>
+                <div class="stat-lbl">Auto-Verified</div>
+            </div>
+        </div>
+
+        <div id="routeBanner" class="route-info-card">
+            <div>
+                <b id="routeTarget">Route to Target</b><br>
+                <span id="routeStats">Calculating ETA...</span>
+            </div>
+            <button onclick="clearCurrentRoute()" style="background:rgba(0,0,0,0.2); border:none; color:white; border-radius:4px; padding:4px 8px; cursor:pointer;">✕</button>
+        </div>
+
+        <div class="filter-tabs">
+            <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+            <button class="filter-btn" onclick="setFilter('high', this)">High</button>
+            <button class="filter-btn" onclick="setFilter('medium', this)">Medium</button>
+            <button class="filter-btn" onclick="setFilter('resolved', this)">Resolved</button>
+        </div>
+
+        <div class="ticket-list" id="potholeList">Polling for live defects...</div>
+
+        <div class="actions-bar">
+            <button class="btn-action" onclick="exportWorkOrders()">📥 Export PWD Manifest (.xlsx)</button>
+        </div>
+    </div>
+    <div id="map"></div>
+
+    <!-- Incident Playbook / SOP Modal -->
+    <div id="playbookModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 id="modalDefectTitle">Defect Incident Playbook #PWD-0001</h2>
+                    <span style="font-size: 0.75rem; color: #9ca3af;" id="modalDefectCoords">Coordinates: 12.82310, 80.04510 • SRM Kattankulathur Sector</span>
+                </div>
+                <button class="close-modal no-print" onclick="closePlaybook()">✕</button>
+            </div>
+
+            <!-- Print Header Banner -->
+            <div class="print-only" style="border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 14px; font-size: 0.8rem;">
+                <b>PUBLIC WORKS DEPARTMENT • ROAD INFRASTRUCTURE MONITORING & REPAIR MANIFEST</b>
+            </div>
+
+            <div class="sop-grid">
+                <div class="sop-card" style="border-left-color: #ef4444;">
+                    <div class="sop-label">Priority & Resolution SLA</div>
+                    <div class="sop-value" id="modalSLA">Immediate (Within 4 Hours)</div>
+                </div>
+                <div class="sop-card">
+                    <div class="sop-label">Sensor Consensus Confidence</div>
+                    <div class="sop-value" id="modalHits">8 Vehicles Verified</div>
+                </div>
+                <div class="sop-card" style="grid-column: span 2;">
+                    <div class="sop-label">Mandatory Material Requisition</div>
+                    <div class="sop-value" id="modalMaterials">Dense Bituminous Macadam (DBM) + Tack Coat + Plate Compactor</div>
+                </div>
+            </div>
+
+            <div class="checklist-box">
+                <div class="sop-label" style="margin-bottom: 8px; color: #38bdf8;">Standard Operating Procedure (SOP) Checklist</div>
+                <label class="checklist-item"><input type="checkbox" checked> <b>1. Safety Buffer:</b> Position reflective safety cones 30m prior to impact zone.</label>
+                <label class="checklist-item"><input type="checkbox" checked> <b>2. Debris Clearing:</b> High-pressure air purge to clear aggregate dust.</label>
+                <label class="checklist-item"><input type="checkbox"> <b>3. Application:</b> Apply bitumen emulsion tack coat to edge walls.</label>
+                <label class="checklist-item"><input type="checkbox"> <b>4. Compaction:</b> Level hot/cold asphalt mix with 3-pass mechanical compactor.</label>
+                <label class="checklist-item"><input type="checkbox"> <b>5. Auto-Verification:</b> Telemetry pass will close ticket in AIKYA portal.</label>
+            </div>
+
+            <!-- Printable Navigation QR and Signature Block -->
+            <div class="print-only" style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 24px; border-top: 1px dashed #94a3b8; padding-top: 16px;">
+                <div style="font-size: 0.78rem;">
+                    <b>Field Crew Navigation QR:</b><br>
+                    <img id="modalQrCode" src="" alt="Google Maps QR" style="width: 90px; height: 90px; border: 1px solid #ccc; margin-top: 4px;"/>
+                    <div style="font-size: 0.65rem; color: #64748b;">Scan to open driving route</div>
+                </div>
+                <div style="font-size: 0.78rem; text-align: right;">
+                    <div><b>Site Supervisor Signature:</b> ___________________________</div>
+                    <div style="margin-top: 8px;"><b>Execution Date & Time:</b> ___________________________</div>
+                </div>
+            </div>
+
+            <div class="no-print" style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+                <button class="btn-action" style="width: auto; padding: 8px 16px;" onclick="window.print()">🖨️ Print Dispatch Card</button>
+                <button class="btn-action" style="width: auto; padding: 8px 16px; background: #0284c7; color: white;" onclick="closePlaybook()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEPOT_COORDS = [12.8231, 80.0415];
+
+        const terrainLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            maxZoom: 17,
+            attribution: '© OpenStreetMap, © OpenTopoMap'
+        });
+
+        const satelliteHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            attribution: '© Google Satellite'
+        });
+
+        const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        });
+
+        const map = L.map('map', {
+            center: [12.8231, 80.0451],
+            zoom: 16,
+            layers: [terrainLayer]
+        });
+
+        const baseMaps = {
+            "⛰️ Topographic / Terrain": terrainLayer,
+            "🛰️ Satellite (Hybrid with Places)": satelliteHybrid,
+            "🗺️ Standard Street": streetLayer
+        };
+
+        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+
+        const depotIcon = L.divIcon({
+            html: `<div style="background:#0284c7; color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border:2px solid white; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.6);">🏢</div>`,
+            className: 'depot-pin',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+        L.marker(DEPOT_COORDS, { icon: depotIcon }).addTo(map).bindPopup("<b>PWD Central Fleet Depot</b><br>Dispatch HQ");
+
+        let markers = {};
+        let activeRouteLayer = null;
+        let currentFilter = 'all';
+        let latestPotholes = [];
+
+        function getSeverityColor(sev, status) {
+            if (status === 'resolved') return '#10b981';
+            if (sev === 'high') return '#ef4444';
+            if (sev === 'medium') return '#f59e0b';
+            return '#38bdf8';
+        }
+
+        function focusPothole(id, lat, lng) {
+            map.flyTo([lat, lng], 18, { animate: true, duration: 1.0 });
+            if (markers[id]) {
+                setTimeout(() => markers[id].openPopup(), 500);
+            }
+        }
+
+        function openPlaybook(id) {
+            const p = latestPotholes.find(item => item.id === id);
+            if (!p) return;
+
+            document.getElementById('modalDefectTitle').innerText = `Work Order Incident Playbook #PWD-${String(p.id).padStart(4, '0')}`;
+            document.getElementById('modalDefectCoords').innerText = `Coordinates: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} • SRM Kattankulathur Sector`;
+            document.getElementById('modalHits').innerText = `${p.hit_count} Cross-Vehicle Sensor Confirmations`;
+
+            const gmapsUrl = encodeURIComponent(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`);
+            document.getElementById('modalQrCode').src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${gmapsUrl}`;
+
+            if (p.severity === 'high') {
+                document.getElementById('modalSLA').innerText = "CRITICAL • 4-Hour Rapid Response";
+                document.getElementById('modalMaterials').innerText = "Bituminous Concrete (2.5 Bags) + Emulsion Tack Coat + Compactor";
+            } else if (p.severity === 'medium') {
+                document.getElementById('modalSLA').innerText = "MEDIUM • 24-Hour Scheduled Patch";
+                document.getElementById('modalMaterials').innerText = "Dense Graded Aggregate + Rapid Cold Patch (1.5 Bags)";
+            } else {
+                document.getElementById('modalSLA').innerText = "LOW • 48-Hour Regular Monitoring";
+                document.getElementById('modalMaterials').innerText = "Cold Mix Asphalt Surface Seal (0.5 Bag)";
+            }
+
+            document.getElementById('playbookModal').style.display = 'flex';
+        }
+
+        function closePlaybook() {
+            document.getElementById('playbookModal').style.display = 'none';
+        }
+
+        function setFilter(filter, btn) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderPotholes();
+        }
+
+        async function planRouteToPothole(id, destLat, destLng) {
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${DEPOT_COORDS[1]},${DEPOT_COORDS[0]};${destLng},${destLat}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (!data.routes || data.routes.length === 0) return alert("No navigable route found.");
+
+                const route = data.routes[0];
+                const distanceKm = (route.distance / 1000).toFixed(2);
+                const durationMin = Math.round(route.duration / 60);
+
+                if (activeRouteLayer) map.removeLayer(activeRouteLayer);
+
+                activeRouteLayer = L.geoJSON(route.geometry, {
+                    style: { color: '#0284c7', weight: 6, opacity: 0.85, dashArray: '1, 8', lineCap: 'round' }
+                }).addTo(map);
+
+                map.fitBounds(activeRouteLayer.getBounds(), { padding: [40, 40] });
+
+                document.getElementById('routeBanner').style.display = 'flex';
+                document.getElementById('routeTarget').innerText = `Repair Dispatch #${id}`;
+                document.getElementById('routeStats').innerText = `${distanceKm} km • ~${durationMin} mins drive`;
+            } catch (err) {
+                console.error("Routing error:", err);
+            }
+        }
+
+        function clearCurrentRoute() {
+            if (activeRouteLayer) {
+                map.removeLayer(activeRouteLayer);
+                activeRouteLayer = null;
+            }
+            document.getElementById('routeBanner').style.display = 'none';
+        }
+
+        function exportWorkOrders() {
+            if (!latestPotholes.length) return alert("No defect data to export.");
+
+            const excelData = latestPotholes.map(p => {
+                const dateObj = new Date(p.last_seen);
+                const cleanDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+
+                let priority = "LOW (Monitoring)";
+                let action = "Surface Leveling";
+                let material = "Cold Mix Asphalt (0.5 Bag)";
+
+                if (p.severity === 'high') {
+                    priority = "CRITICAL (Immediate)";
+                    action = "Deep Mill & Hot Fill";
+                    material = "Bituminous Concrete (2.5 Bags)";
+                } else if (p.severity === 'medium') {
+                    priority = "MEDIUM (Scheduled)";
+                    action = "Edge Sealing & Patch";
+                    material = "Dense Aggregate + Rapid Patch";
+                }
+
+                if (p.status === 'resolved') {
+                    priority = "COMPLETED";
+                    action = "No Action Required";
+                    material = "None (Auto-Verified)";
+                }
+
+                return {
+                    "Work Order ID": `PWD-DEF-${String(p.id).padStart(4, '0')}`,
+                    "Defect Priority": priority,
+                    "Status": p.status.toUpperCase(),
+                    "Vehicle Hits": `${p.hit_count} vehicles`,
+                    "Latitude": p.lat.toFixed(5),
+                    "Longitude": p.lng.toFixed(5),
+                    "Corridor Zone": "SRM Kattankulathur",
+                    "Recommended Action": action,
+                    "Bill of Material": material,
+                    "Logged Time": cleanDate,
+                    "Google Maps Link": `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(excelData);
+            ws['!cols'] = [
+                { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 16 },
+                { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 24 },
+                { wch: 34 }, { wch: 18 }, { wch: 40 }
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "PWD Manifest");
+            XLSX.writeFile(wb, `AIKYA_PWD_Manifest_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        function renderPotholes() {
+            let activeCount = 0;
+            let resolvedCount = 0;
+            let listHtml = "";
+
+            latestPotholes.forEach(p => {
+                if (p.status === 'resolved') resolvedCount++;
+                else activeCount++;
+
+                const color = getSeverityColor(p.severity, p.status);
+                const gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${DEPOT_COORDS[0]},${DEPOT_COORDS[1]}&destination=${p.lat},${p.lng}&travelmode=driving`;
+
+                if (!markers[p.id]) {
+                    markers[p.id] = L.circleMarker([p.lat, p.lng], {
+                        radius: 8,
+                        fillColor: color,
+                        color: '#ffffff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.9
+                    }).addTo(map);
+                } else {
+                    markers[p.id].setStyle({ fillColor: color });
+                }
+
+                markers[p.id].bindPopup(`
+                    <div style="font-family: sans-serif; color: #0f172a; min-width: 180px;">
+                        <b>Defect #${p.id} (${p.severity.toUpperCase()})</b><br>
+                        Sensor Hits: <b>${p.hit_count}</b> vehicles<br>
+                        Status: <b>${p.status.toUpperCase()}</b><br>
+                        Coords: <code>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</code>
+                        <button class="btn-route btn-playbook" onclick="openPlaybook(${p.id})">📋 View Incident Playbook</button>
+                        <button class="btn-route" onclick="planRouteToPothole(${p.id}, ${p.lat}, ${p.lng})">🚚 Dispatch Repair Route</button>
+                        <a class="btn-route btn-gmaps" href="${gmapsUrl}" target="_blank">🗺️ Open in Google Maps</a>
+                    </div>
+                `);
+
+                let shouldShow = false;
+                if (currentFilter === 'all') shouldShow = true;
+                else if (currentFilter === 'resolved' && p.status === 'resolved') shouldShow = true;
+                else if (currentFilter === p.severity && p.status !== 'resolved') shouldShow = true;
+
+                if (shouldShow) {
+                    listHtml += `
+                        <div class="ticket ${p.status === 'resolved' ? 'resolved' : p.severity}" onclick="focusPothole(${p.id}, ${p.lat}, ${p.lng})">
+                            <span class="badge ${p.status === 'resolved' ? 'badge-resolved' : 'badge-verified'}">${p.status}</span>
+                            <b>Defect #${p.id} (${p.severity.toUpperCase()})</b>
+                            <div style="color: var(--text-main); margin-top: 4px;">Hits Recorded: <b>${p.hit_count} vehicles</b></div>
+                            <div style="color: var(--text-muted); font-size: 0.72rem; margin-top: 2px;">📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</div>
+                        </div>
+                    `;
+                }
+            });
+
+            document.getElementById('totalDefects').innerText = activeCount;
+            document.getElementById('resolvedCount').innerText = resolvedCount;
+            document.getElementById('potholeList').innerHTML = listHtml || "<div style='color:var(--text-muted); text-align:center; padding:20px;'>No matching defects.</div>";
+        }
+
+        async function fetchDashboardData() {
+            try {
+                const res = await fetch("http://127.0.0.1:8000/api/potholes");
+                latestPotholes = await res.json();
+                renderPotholes();
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+        }
+
+        setInterval(fetchDashboardData, 2000);
+        fetchDashboardData();
+    </script>
+</body>
+</html>

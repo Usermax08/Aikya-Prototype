@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIKYA - Road Telemetry Sensor</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #0f172a; color: #f8fafc; }
+        .card { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }
+        h1 { font-size: 1.4rem; margin-top: 0; color: #38bdf8; }
+        .metric { display: flex; justify-content: space-between; margin: 8px 0; border-bottom: 1px solid #334155; padding-bottom: 6px; }
+        .val { font-weight: bold; font-family: monospace; color: #38bdf8; }
+        .btn { width: 100%; padding: 14px; border-radius: 8px; border: none; font-weight: bold; font-size: 1rem; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        .btn-start { background: #0284c7; color: white; }
+        .btn-bump { background: #e11d48; color: white; }
+        .btn-smooth { background: #059669; color: white; }
+        .status-box { padding: 10px; border-radius: 6px; background: #334155; font-size: 0.85rem; margin-top: 12px; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>AIKYA Road Telemetry</h1>
+        <div class="metric"><span>Status:</span> <span id="status" class="val">Idle</span></div>
+        <div class="metric"><span>Latitude:</span> <span id="lat" class="val">--</span></div>
+        <div class="metric"><span>Longitude:</span> <span id="lng" class="val">--</span></div>
+        <div class="metric"><span>Speed:</span> <span id="speed" class="val">0 km/h</span></div>
+        <div class="metric"><span>Z-Accel Spike:</span> <span id="accel" class="val">0.0 m/s²</span></div>
+        
+        <button id="startBtn" class="btn btn-start" onclick="initSensors()">Start Live Tracking</button>
+    </div>
+
+    <div class="card">
+        <h2 style="font-size: 1.1rem; margin-top: 0; color: #94a3b8;">Demo Simulation Triggers</h2>
+        <button class="btn btn-bump" onclick="sendSimulatedHit()">⚠️ Simulate Pothole Impact (Spike)</button>
+        <button class="btn btn-smooth" onclick="sendSmoothPass()">✅ Simulate Smooth Pass (Resolved)</button>
+        <div class="status-box" id="logBox">Awaiting user action...</div>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000/api/telemetry";
+        let curLat = 12.8231, curLng = 80.0451, curSpeed = 25.0, curZ = 0.0;
+        let isTracking = false;
+
+        function log(msg) {
+            document.getElementById('logBox').innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        }
+
+        async function initSensors() {
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                const permission = await DeviceMotionEvent.requestPermission();
+                if (permission !== 'granted') return alert('Motion permission denied');
+            }
+
+            if ('geolocation' in navigator) {
+                navigator.geolocation.watchPosition(pos => {
+                    curLat = pos.coords.latitude;
+                    curLng = pos.coords.longitude;
+                    curSpeed = (pos.coords.speed || 0) * 3.6;
+                    document.getElementById('lat').innerText = curLat.toFixed(5);
+                    document.getElementById('lng').innerText = curLng.toFixed(5);
+                    document.getElementById('speed').innerText = `${curSpeed.toFixed(1)} km/h`;
+                }, err => console.log(err), { enableHighAccuracy: true });
+            }
+
+            window.addEventListener('devicemotion', event => {
+                const z = event.accelerationIncludingGravity ? event.accelerationIncludingGravity.z : 0;
+                curZ = Math.abs(z - 9.8);
+                document.getElementById('accel').innerText = `${curZ.toFixed(2)} m/s²`;
+
+                if (curZ > 12.5 && isTracking) {
+                    sendPayload({ lat: curLat, lng: curLng, z_accel: curZ, speed_kmh: curSpeed });
+                }
+            });
+
+            isTracking = true;
+            document.getElementById('status').innerText = 'Active (Broadcasting)';
+            document.getElementById('status').style.color = '#4ade80';
+            document.getElementById('startBtn').style.display = 'none';
+            log('Sensors initialized.');
+        }
+
+        async function sendPayload(payload) {
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                log(`Server Response: ${JSON.stringify(data)}`);
+            } catch (err) {
+                log(`Failed to connect to API: ${err.message}`);
+            }
+        }
+
+        function sendSimulatedHit() {
+            // Slight jitter for realistic DBSCAN demo within ~5m
+            const jitterLat = curLat + (Math.random() - 0.5) * 0.00004;
+            const jitterLng = curLng + (Math.random() - 0.5) * 0.00004;
+            sendPayload({
+                lat: jitterLat,
+                lng: jitterLng,
+                z_accel: 16.5,
+                speed_kmh: 30.0,
+                is_simulated_bump: true
+            });
+        }
+
+        function sendSmoothPass() {
+            sendPayload({
+                lat: curLat,
+                lng: curLng,
+                z_accel: 0.2,
+                speed_kmh: 30.0,
+                is_smooth_pass: true
+            });
+        }
+    </script>
+</body>
+</html>
