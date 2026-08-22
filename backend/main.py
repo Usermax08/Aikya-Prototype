@@ -3,20 +3,16 @@ import sys
 import datetime
 from typing import List, Optional
 
-# Force Python to find modules inside the backend directory
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from fastapi import FastAPI, Depends, BackgroundTasks
+from fastapi import FastAPI, Depends, BackgroundTasks, Form, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from models import SessionLocal, init_db, Hit, Pothole
-from filters import butterworth_filter
-from cluster import cluster_hits, check_smooth_pass_resolution
+from backend.models import SessionLocal, init_db, Hit, Pothole
+from backend.filters import butterworth_filter
+from backend.cluster import cluster_hits, check_smooth_pass_resolution
 
 init_db()
 
@@ -75,6 +71,36 @@ async def receive_telemetry(payload: TelemetryPayload, background_tasks: Backgro
         "max_z_accel": round(float(max_vertical_spike), 2)
     }
 
+@app.post("/api/report")
+async def create_citizen_report(
+    lat: float = Form(...),
+    lng: float = Form(...),
+    severity: str = Form("medium"),
+    description: Optional[str] = Form("Citizen reported defect"),
+    photo: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    new_pothole = Pothole(
+        lat=lat,
+        lng=lng,
+        hit_count=1,
+        severity=severity.lower(),
+        status="verified",
+        first_seen=now,
+        last_seen=now,
+        smooth_pass_count=0
+    )
+    db.add(new_pothole)
+    db.commit()
+    db.refresh(new_pothole)
+    return {
+        "status": "success",
+        "id": new_pothole.id,
+        "has_photo": photo is not None and photo.filename != "",
+        "message": f"Defect logged as Ticket #{new_pothole.id}."
+    }
+
 @app.get("/api/potholes")
 def get_potholes(db: Session = Depends(get_db)):
     records = db.query(Pothole).all()
@@ -104,3 +130,7 @@ if os.path.exists(web_dir):
     @app.get("/sensor")
     def serve_sensor():
         return FileResponse(os.path.join(web_dir, "sensor.html"))
+
+    @app.get("/report")
+    def serve_report():
+        return FileResponse(os.path.join(web_dir, "report.html"))

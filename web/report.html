@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIKYA - Citizen Grievance Portal</title>
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-card: #111827;
+            --accent-blue: #0284c7;
+            --accent-cyan: #38bdf8;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #374151;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-base);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 460px;
+            background: var(--bg-card);
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 1.3rem; margin: 0; color: var(--accent-cyan); font-weight: 800; }
+        .header p { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+
+        .form-group { margin-bottom: 14px; }
+        label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            background: #1f2937;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-main);
+            font-size: 0.85rem;
+            outline: none;
+        }
+        input:focus, select:focus, textarea:focus { border-color: var(--accent-blue); }
+
+        .btn-gps {
+            background: #1e293b;
+            border: 1px dashed var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 8px;
+            border-radius: 6px;
+            width: 100%;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 4px;
+        }
+
+        .photo-upload-zone {
+            border: 2px dashed #374151;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+            background: #172033;
+        }
+        .photo-upload-zone:hover { border-color: var(--accent-cyan); }
+        .photo-preview {
+            width: 100%;
+            max-height: 180px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .btn-submit {
+            width: 100%;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.2s;
+        }
+        .btn-submit:hover { background: #0369a1; }
+
+        .alert-box {
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            margin-top: 14px;
+            display: none;
+            text-align: center;
+        }
+        .alert-success { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid #10b981; }
+        .alert-error { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📢 Report a Road Defect</h1>
+            <p>Citizen Grievance & PWD Field Action Center</p>
+        </div>
+
+        <form id="reportForm">
+            <!-- GPS Section -->
+            <div class="form-group">
+                <label>Defect Coordinates (Auto-Captured)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="lat" name="lat" placeholder="Latitude" required readonly>
+                    <input type="text" id="lng" name="lng" placeholder="Longitude" required readonly>
+                </div>
+                <button type="button" class="btn-gps" onclick="fetchGPS()">📍 Refresh Accurate GPS</button>
+            </div>
+
+            <!-- Hazard Severity -->
+            <div class="form-group">
+                <label>Estimated Severity</label>
+                <select id="severity" name="severity">
+                    <option value="high">Critical (Deep pothole / Immediate hazard)</option>
+                    <option value="medium" selected>Medium (Moderate cavity / Surface erosion)</option>
+                    <option value="low">Low (Minor asphalt raveling / Crack)</option>
+                </select>
+            </div>
+
+            <!-- Optional Camera Capture -->
+            <div class="form-group">
+                <label>Attach Photo (Optional)</label>
+                <div class="photo-upload-zone" onclick="document.getElementById('photoInput').click()">
+                    <span id="photoStatusText" style="font-size: 0.8rem; color: var(--accent-cyan);">📸 Take Photo / Upload Image</span>
+                    <input type="file" id="photoInput" name="photo" accept="image/*" capture="environment" style="display: none;" onchange="handlePhotoSelect(event)">
+                    <img id="photoPreview" class="photo-preview" alt="Captured Defect Preview">
+                </div>
+            </div>
+
+            <!-- Notes -->
+            <div class="form-group">
+                <label>Description / Landmark (Optional)</label>
+                <textarea id="description" name="description" rows="2" placeholder="e.g., Near Kattankulathur gate 2, left side lane..."></textarea>
+            </div>
+
+            <button type="submit" class="btn-submit" id="submitBtn">Dispatch Grievance to PWD</button>
+        </form>
+
+        <div id="alertBox" class="alert-box"></div>
+
+        <div style="text-align: center; margin-top: 16px;">
+            <a href="/" style="color: var(--accent-cyan); font-size: 0.8rem; text-decoration: none;">← Back to Command Portal Map</a>
+        </div>
+    </div>
+
+    <script>
+        function fetchGPS() {
+            if (!navigator.geolocation) {
+                return alert("Geolocation is not supported by your browser.");
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    document.getElementById('lat').value = pos.coords.latitude.toFixed(5);
+                    document.getElementById('lng').value = pos.coords.longitude.toFixed(5);
+                },
+                (err) => {
+                    // Fallback to demo Kattankulathur sector coords if denied on desktop
+                    document.getElementById('lat').value = (12.8231 + (Math.random() - 0.5) * 0.005).toFixed(5);
+                    document.getElementById('lng').value = (80.0451 + (Math.random() - 0.5) * 0.005).toFixed(5);
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        fetchGPS();
+
+        function handlePhotoSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const preview = document.getElementById('photoPreview');
+                    preview.src = event.target.result;
+                    preview.style.display = 'block';
+                    document.getElementById('photoStatusText').innerText = `✅ Photo Attached (${file.name})`;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        document.getElementById('reportForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
+            const alertBox = document.getElementById('alertBox');
+
+            const formData = new FormData(e.target);
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Dispatching to AIKYA Portal...";
+
+            try {
+                const res = await fetch("/api/report", {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await res.json();
+
+                alertBox.className = "alert-box alert-success";
+                alertBox.innerText = `✅ Pothole Ticket #${data.id} recorded! Dispatched to municipal repair queue.`;
+                alertBox.style.display = "block";
+
+                document.getElementById('reportForm').reset();
+                document.getElementById('photoPreview').style.display = 'none';
+                document.getElementById('photoStatusText').innerText = "📸 Take Photo / Upload Image";
+                fetchGPS();
+            } catch (err) {
+                alertBox.className = "alert-box alert-error";
+                alertBox.innerText = "❌ Failed to submit grievance. Please try again.";
+                alertBox.style.display = "block";
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "Dispatch Grievance to PWD";
+            }
+        });
+    </script>
+</body>
+</html>
