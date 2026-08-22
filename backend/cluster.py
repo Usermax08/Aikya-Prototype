@@ -1,48 +1,52 @@
-import numpy as np
-from sklearn.cluster import DBSCAN
-import math
+import datetime
+import random
+from sqlalchemy.orm import Session
 
-EARTH_RADIUS_METERS = 6371000.0
+try:
+    from backend.models import SessionLocal, init_db, Pothole, Hit
+except ImportError:
+    from models import SessionLocal, init_db, Pothole, Hit
 
-def haversine_distance(lat1, lon1, lat2, lon2):
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
-    return 2 * EARTH_RADIUS_METERS * math.asin(math.sqrt(a))
+def seed_demo_data():
+    init_db()
+    db: Session = SessionLocal()
 
-def cluster_hits(hits, eps_meters=10.0, min_samples=3):
-    if len(hits) < min_samples:
-        return []
+    # Clear existing data for fresh demo
+    db.query(Hit).delete()
+    db.query(Pothole).delete()
+    db.commit()
 
-    coords = np.array([[h['lat'], h['lng']] for h in hits])
-    coords_rad = np.radians(coords)
-    eps_rad = eps_meters / EARTH_RADIUS_METERS
+    base_lat, base_lng = 12.8231, 80.0451  # Kattankulathur Sector
 
-    db = DBSCAN(eps=eps_rad, min_samples=min_samples, metric='haversine')
-    labels = db.fit_predict(coords_rad)
+    demo_potholes = [
+        {"offset": (0.0012, 0.0015), "hits": 14, "severity": "high", "status": "verified"},
+        {"offset": (-0.0018, 0.0022), "hits": 8, "severity": "medium", "status": "verified"},
+        {"offset": (0.0025, -0.0011), "hits": 4, "severity": "low", "status": "verified"},
+        {"offset": (-0.0031, -0.0020), "hits": 19, "severity": "high", "status": "verified"},
+        {"offset": (0.0008, -0.0034), "hits": 6, "severity": "medium", "status": "verified"},
+        {"offset": (-0.0022, 0.0011), "hits": 11, "severity": "high", "status": "resolved"},
+        {"offset": (0.0034, 0.0028), "hits": 5, "severity": "low", "status": "resolved"},
+    ]
 
-    clusters = []
-    unique_labels = set(labels) - {-1}
+    for p_data in demo_potholes:
+        p_lat = base_lat + p_data["offset"][0]
+        p_lng = base_lng + p_data["offset"][1]
 
-    for label in unique_labels:
-        cluster_points = [hits[i] for i in range(len(hits)) if labels[i] == label]
-        mean_lat = float(np.mean([p['lat'] for p in cluster_points]))
-        mean_lng = float(np.mean([p['lng'] for p in cluster_points]))
-        max_accel = max([p['z_accel'] for p in cluster_points])
-        
-        severity = "low"
-        if max_accel > 18.0 or len(cluster_points) >= 6:
-            severity = "high"
-        elif max_accel > 13.0 or len(cluster_points) >= 3:
-            severity = "medium"
+        pothole = Pothole(
+            lat=p_lat,
+            lng=p_lng,
+            hit_count=p_data["hits"],
+            severity=p_data["severity"],
+            status=p_data["status"],
+            first_seen=datetime.datetime.utcnow() - datetime.timedelta(hours=random.randint(4, 72)),
+            last_seen=datetime.datetime.utcnow(),
+            smooth_pass_count=3 if p_data["status"] == "resolved" else 0
+        )
+        db.add(pothole)
 
-        clusters.append({
-            "lat": round(mean_lat, 6),
-            "lng": round(mean_lng, 6),
-            "hit_count": len(cluster_points),
-            "severity": severity,
-            "status": "verified"
-        })
+    db.commit()
+    db.close()
+    print("AIKYA Database successfully seeded with demo defects.")
 
-    return clusters
+if __name__ == "__main__":
+    seed_demo_data()
