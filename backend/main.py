@@ -1,178 +1,435 @@
-import os
-import sys
-import datetime
-import random
-from typing import List, Optional
-
-# Ensure internal modules resolve
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from fastapi import FastAPI, Depends, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-
-try:
-    from models import SessionLocal, init_db, Hit, Pothole
-    from filters import butterworth_filter
-    from cluster import cluster_hits, check_smooth_pass_resolution
-except ImportError:
-    from backend.models import SessionLocal, init_db, Hit, Pothole
-    from backend.filters import butterworth_filter
-    from backend.cluster import cluster_hits, check_smooth_pass_resolution
-
-init_db()
-
-app = FastAPI(title="AIKYA PWD Backend")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# Automatic on-startup seeding
-@app.on_event("startup")
-def startup_seed_db():
-    db = SessionLocal()
-    if db.query(Pothole).count() == 0:
-        base_lat, base_lng = 12.8231, 80.0451
-        campus_defects = [
-            {"offset": (0.0008, 0.0012), "hits": 14, "severity": "high", "status": "verified"},
-            {"offset": (-0.0012, 0.0018), "hits": 8, "severity": "medium", "status": "verified"},
-            {"offset": (0.0019, -0.0009), "hits": 4, "severity": "low", "status": "verified"},
-            {"offset": (-0.0021, -0.0015), "hits": 18, "severity": "high", "status": "verified"},
-            {"offset": (0.0005, -0.0022), "hits": 6, "severity": "medium", "status": "verified"},
-            {"offset": (-0.0015, 0.0008), "hits": 11, "severity": "high", "status": "resolved"},
-            {"offset": (0.0024, 0.0021), "hits": 5, "severity": "low", "status": "resolved"},
-        ]
-        now = datetime.datetime.now(datetime.timezone.utc)
-        for p_data in campus_defects:
-            p_lat = base_lat + p_data["offset"][0]
-            p_lng = base_lng + p_data["offset"][1]
-            pothole = Pothole(
-                lat=p_lat,
-                lng=p_lng,
-                hit_count=p_data["hits"],
-                severity=p_data["severity"],
-                status=p_data["status"],
-                first_seen=now - datetime.timedelta(hours=random.randint(4, 72)),
-                last_seen=now,
-                smooth_pass_count=3 if p_data["status"] == "resolved" else 0
-            )
-            db.add(pothole)
-        db.commit()
-    db.close()
-
-class TelemetryPayload(BaseModel):
-    device_id: str
-    lat: float
-    lng: float
-    speed_kmh: float
-    z_raw: List[float]
-
-class CitizenReportPayload(BaseModel):
-    lat: float
-    lng: float
-    severity: str = "medium"
-    description: Optional[str] = "Citizen reported defect"
-    photo_base64: Optional[str] = None
-
-@app.post("/api/telemetry")
-async def receive_telemetry(payload: TelemetryPayload, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    cutoff_freq = 5.0
-    sampling_rate = 50.0
-    filtered_accel = butterworth_filter(payload.z_raw, cutoff_freq, sampling_rate)
-    
-    max_vertical_spike = max(map(abs, filtered_accel)) if len(filtered_accel) > 0 else 0.0
-    is_impact = max_vertical_spike > 12.0
-    
-    hit = Hit(
-        device_id=payload.device_id,
-        lat=payload.lat,
-        lng=payload.lng,
-        z_accel=round(float(max_vertical_spike), 2),
-        speed_kmh=round(float(payload.speed_kmh), 1),
-        is_spike=is_impact
-    )
-    db.add(hit)
-    db.commit()
-
-    if is_impact:
-        background_tasks.add_task(cluster_hits, db)
-    else:
-        background_tasks.add_task(check_smooth_pass_resolution, db, payload.lat, payload.lng)
-
-    return {
-        "status": "processed",
-        "is_spike": is_impact,
-        "max_z_accel": round(float(max_vertical_spike), 2)
-    }
-
-@app.post("/api/report")
-def create_citizen_report(payload: CitizenReportPayload, db: Session = Depends(get_db)):
-    now = datetime.datetime.now(datetime.timezone.utc)
-    new_pothole = Pothole(
-        lat=payload.lat,
-        lng=payload.lng,
-        hit_count=1,
-        severity=payload.severity.lower(),
-        status="verified",
-        first_seen=now,
-        last_seen=now,
-        smooth_pass_count=0
-    )
-    db.add(new_pothole)
-    db.commit()
-    db.refresh(new_pothole)
-    return {
-        "status": "success",
-        "id": new_pothole.id,
-        "has_photo": bool(payload.photo_base64),
-        "message": f"Defect logged as Ticket #{new_pothole.id}."
-    }
-
-@app.get("/api/potholes")
-def get_potholes(db: Session = Depends(get_db)):
-    records = db.query(Pothole).all()
-    return [
-        {
-            "id": p.id,
-            "lat": p.lat,
-            "lng": p.lng,
-            "hit_count": p.hit_count,
-            "severity": p.severity,
-            "status": p.status,
-            "first_seen": p.first_seen.isoformat() if p.first_seen else None,
-            "last_seen": p.last_seen.isoformat() if p.last_seen else None
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIKYA - PWD Central Command Portal</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-surface: #111827;
+            --bg-card: #1f2937;
+            --border: #374151;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --accent-blue: #0284c7;
+            --accent-cyan: #38bdf8;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
         }
-        for p in records
-    ]
 
-# Static web hosting
-web_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web"))
-if os.path.exists(web_dir):
-    app.mount("/static", StaticFiles(directory=web_dir), name="static")
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-base);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
 
-    @app.get("/")
-    def serve_dashboard():
-        return FileResponse(os.path.join(web_dir, "dashboard.html"))
+        header {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
 
-    @app.get("/sensor")
-    def serve_sensor():
-        return FileResponse(os.path.join(web_dir, "sensor.html"))
+        .brand h1 { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--accent-cyan); letter-spacing: 0.5px; }
+        .brand p { margin: 0; font-size: 0.7rem; color: var(--text-muted); }
 
-    @app.get("/report")
-    def serve_report():
-        return FileResponse(os.path.join(web_dir, "report.html"))
+        .actions-bar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-action {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 7px 12px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: 0.15s ease;
+        }
+        .btn-action:hover { background: #374151; border-color: var(--accent-cyan); }
+        .btn-action.btn-primary { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+        .btn-action.btn-primary:hover { background: #0369a1; }
+
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            flex: 1;
+            height: calc(100vh - 61px);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sidebar {
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            padding: 8px 10px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+        .stat-card .val { font-size: 1.2rem; font-weight: 800; }
+        .stat-card .lbl { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+
+        .filter-tabs {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            padding: 8px 12px;
+            gap: 4px;
+            border-bottom: 1px solid var(--border);
+        }
+        .filter-btn {
+            background: none;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            padding: 5px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .filter-btn.active { background: #1e293b; color: var(--accent-cyan); border-color: #38bdf8; }
+
+        .ticket-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 12px;
+        }
+
+        .ticket-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 10px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .ticket-card:hover { border-color: var(--accent-cyan); background: #283548; }
+
+        .ticket-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .ticket-id { font-size: 0.78rem; font-weight: 800; color: var(--accent-cyan); }
+        .ticket-badge {
+            font-size: 0.62rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .badge-high { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+        .badge-medium { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+        .badge-low { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; }
+        .badge-resolved { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+
+        .ticket-details { font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
+
+        #map-container {
+            width: 100%;
+            height: 100%;
+            background: #0b0f19;
+        }
+
+        /* Playbook & Remediation Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        .playbook-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            width: 90%;
+            max-width: 480px;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        .playbook-card h2 { margin: 0 0 6px 0; font-size: 1.1rem; color: var(--accent-cyan); }
+        .playbook-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; }
+        .playbook-row span:first-child { color: var(--text-muted); }
+        .playbook-row span:last-child { font-weight: 600; color: #fff; }
+        .playbook-actions { display: flex; gap: 8px; margin-top: 18px; }
+
+        @media (max-width: 768px) {
+            .dashboard-layout { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">
+            <h1>AIKYA // PWD Central Portal</h1>
+            <p>Automated Defect Telemetry & Maintenance Dispatch Engine</p>
+        </div>
+        <div class="actions-bar">
+            <button class="btn-action" onclick="exportManifest()">📥 Export Manifest (.csv)</button>
+            <a href="/report" class="btn-action btn-primary">📢 Report Pothole</a>
+            <a href="/sensor" target="_blank" class="btn-action">📱 Sensor Node</a>
+        </div>
+    </header>
+
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="val" id="count-critical" style="color: var(--danger);">0</div>
+                    <div class="lbl">Critical</div>
+                </div>
+                <div class="stat-card">
+                    <div class="val" id="count-active" style="color: var(--warning);">0</div>
+                    <div class="lbl">Active</div>
+                </div>
+                <div class="stat-card">
+                    <div class="val" id="count-resolved" style="color: var(--success);">0</div>
+                    <div class="lbl">Resolved</div>
+                </div>
+            </div>
+
+            <div class="filter-tabs">
+                <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+                <button class="filter-btn" onclick="setFilter('high', this)">High</button>
+                <button class="filter-btn" onclick="setFilter('medium', this)">Medium</button>
+                <button class="filter-btn" onclick="setFilter('resolved', this)">Resolved</button>
+            </div>
+
+            <div class="ticket-list" id="tickets-container">
+                <!-- Dynamically loaded defect tickets -->
+            </div>
+        </aside>
+
+        <div id="map-container"></div>
+    </div>
+
+    <!-- PWD Incident Playbook Modal -->
+    <div class="modal-overlay" id="playbookModal">
+        <div class="playbook-card">
+            <h2 id="modal-title">Incident Playbook // Ticket #--</h2>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 14px;">Automated Remediation Estimation & Material Dispatch Specs</p>
+            
+            <div class="playbook-row">
+                <span>Remediation Strategy:</span>
+                <span id="modal-strategy">High-Performance Cold Mix Asphalt Patch</span>
+            </div>
+            <div class="playbook-row">
+                <span>Material Required:</span>
+                <span id="modal-material">~45 kg Polymer Modified Bitumen</span>
+            </div>
+            <div class="playbook-row">
+                <span>Estimated Repair Cost:</span>
+                <span id="modal-cost">₹1,450 INR</span>
+            </div>
+            <div class="playbook-row">
+                <span>Recommended Crew:</span>
+                <span id="modal-crew">2 Technicians + Compactor</span>
+            </div>
+            <div class="playbook-row">
+                <span>Priority SLA:</span>
+                <span id="modal-sla" style="color: #f87171;">Within 24 Hours</span>
+            </div>
+
+            <div class="playbook-actions">
+                <button class="btn-action btn-primary" style="flex: 1;" onclick="dispatchWorkOrder()">🚀 Dispatch Work Order</button>
+                <button class="btn-action" style="flex: 1;" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let allPotholes = [];
+        let currentFilter = 'all';
+        let markers = {};
+        let activeSelectedId = null;
+
+        // Centered on Kattankulathur Campus Sector
+        const map = L.map('map-container').setView([12.8231, 80.0451], 16);
+
+        L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        }).addTo(map);
+
+        function getMarkerColor(p) {
+            if (p.status === 'resolved') return '#10b981';
+            if (p.severity === 'high') return '#ef4444';
+            if (p.severity === 'medium') return '#f59e0b';
+            return '#38bdf8';
+        }
+
+        async function fetchPotholes() {
+            try {
+                const res = await fetch('/api/potholes');
+                allPotholes = await res.json();
+                renderDashboard();
+            } catch (err) {
+                console.error("Error fetching defect data:", err);
+            }
+        }
+
+        function setFilter(filter, el) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            el.classList.add('active');
+            renderDashboard();
+        }
+
+        function renderDashboard() {
+            let critical = 0, active = 0, resolved = 0;
+            const container = document.getElementById('tickets-container');
+            container.innerHTML = '';
+
+            // Calculate Metrics
+            allPotholes.forEach(p => {
+                if (p.status === 'resolved') resolved++;
+                else {
+                    active++;
+                    if (p.severity === 'high') critical++;
+                }
+
+                // Add / update marker on map
+                if (!markers[p.id]) {
+                    const circle = L.circleMarker([p.lat, p.lng], {
+                        radius: p.severity === 'high' ? 9 : 7,
+                        fillColor: getMarkerColor(p),
+                        color: '#ffffff',
+                        weight: 1.5,
+                        opacity: 0.9,
+                        fillOpacity: 0.85
+                    }).addTo(map);
+
+                    circle.bindPopup(`
+                        <div style="color: #111827; font-size: 0.8rem;">
+                            <b>Ticket #${p.id}</b><br>
+                            Severity: <b style="text-transform: uppercase;">${p.severity}</b><br>
+                            Sensor Impacts: <b>${p.hit_count} hits</b><br>
+                            Status: <b>${p.status}</b><br><br>
+                            <button onclick="openPlaybook(${p.id})" style="background:#0284c7;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">📋 Open Playbook</button>
+                        </div>
+                    `);
+                    markers[p.id] = circle;
+                }
+            });
+
+            document.getElementById('count-critical').innerText = critical;
+            document.getElementById('count-active').innerText = active;
+            document.getElementById('count-resolved').innerText = resolved;
+
+            // Filter for Sidebar List
+            const filtered = allPotholes.filter(p => {
+                if (currentFilter === 'all') return true;
+                if (currentFilter === 'resolved') return p.status === 'resolved';
+                return p.severity === currentFilter && p.status !== 'resolved';
+            });
+
+            filtered.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'ticket-card';
+                const badgeClass = p.status === 'resolved' ? 'badge-resolved' : `badge-${p.severity}`;
+
+                card.innerHTML = `
+                    <div class="ticket-head">
+                        <span class="ticket-id">TICKET #${p.id}</span>
+                        <span class="ticket-badge ${badgeClass}">${p.status === 'resolved' ? 'RESOLVED' : p.severity}</span>
+                    </div>
+                    <div class="ticket-details">
+                        📍 Lat: ${p.lat.toFixed(4)}, Lng: ${p.lng.toFixed(4)}<br>
+                        📊 Impact Cluster: ${p.hit_count} hits confirmed
+                    </div>
+                `;
+
+                card.onclick = () => {
+                    map.flyTo([p.lat, p.lng], 18, { animate: true, duration: 1.2 });
+                    markers[p.id].openPopup();
+                };
+
+                container.appendChild(card);
+            });
+        }
+
+        // Incident Playbook Trigger
+        window.openPlaybook = function(id) {
+            const p = allPotholes.find(item => item.id === id);
+            if (!p) return;
+            activeSelectedId = id;
+
+            document.getElementById('modal-title').innerText = `Incident Playbook // Ticket #${p.id}`;
+            document.getElementById('modal-cost').innerText = p.severity === 'high' ? '₹2,400 INR' : (p.severity === 'medium' ? '₹1,450 INR' : '₹750 INR');
+            document.getElementById('modal-material').innerText = p.severity === 'high' ? '~75 kg Dense Bitumen Macadam' : '~40 kg Cold Mix Asphalt';
+            document.getElementById('modal-sla').innerText = p.severity === 'high' ? 'Within 12 Hours (Urgent)' : (p.severity === 'medium' ? 'Within 48 Hours' : 'Within 5 Days');
+            document.getElementById('modal-sla').style.color = p.severity === 'high' ? '#ef4444' : '#fbbf24';
+
+            document.getElementById('playbookModal').style.display = 'flex';
+        };
+
+        function closeModal() {
+            document.getElementById('playbookModal').style.display = 'none';
+        }
+
+        function dispatchWorkOrder() {
+            alert(`✅ Work order for Ticket #${activeSelectedId} dispatched to field crew!`);
+            closeModal();
+        }
+
+        function exportManifest() {
+            if (allPotholes.length === 0) return alert("No defects to export.");
+            let csv = "ID,Latitude,Longitude,Severity,Hits,Status,FirstSeen,LastSeen\n";
+            allPotholes.forEach(p => {
+                csv += `${p.id},${p.lat},${p.lng},${p.severity},${p.hit_count},${p.status},${p.first_seen || ''},${p.last_seen || ''}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `AIKYA_PWD_Manifest_${new Date().toISOString().slice(0,10)}.csv`);
+            a.click();
+        }
+
+        fetchPotholes();
+        setInterval(fetchPotholes, 5000);
+    </script>
+</body>
+</html>
