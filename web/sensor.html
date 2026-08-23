@@ -6,16 +6,16 @@
     <title>AIKYA - Road Telemetry Edge Node</title>
     <style>
         :root {
-            --bg-base: #090d16;
-            --bg-card: #111827;
-            --border: #374151;
+            --bg-base: #060913;
+            --bg-card: #0f172a;
+            --border: #1e293b;
             --accent-cyan: #38bdf8;
             --accent-blue: #0284c7;
             --danger: #ef4444;
             --warning: #f59e0b;
             --success: #10b981;
-            --text-main: #f3f4f6;
-            --text-muted: #9ca3af;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,36 +27,37 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            user-select: none;
         }
 
         header {
             text-align: center;
-            padding-bottom: 14px;
+            padding-bottom: 12px;
             border-bottom: 1px solid var(--border);
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
-        header h1 { font-size: 1.15rem; color: var(--accent-cyan); font-weight: 800; }
+        header h1 { font-size: 1.2rem; color: var(--accent-cyan); font-weight: 800; letter-spacing: 0.5px; }
         header p { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
 
-        .status-badge {
+        .status-pill {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 4px 10px;
+            padding: 4px 12px;
             border-radius: 20px;
             font-size: 0.72rem;
             font-weight: 700;
-            background: #1f2937;
-            border: 1px solid var(--border);
+            background: #1e293b;
+            border: 1px solid #334155;
             margin-top: 8px;
         }
-        .dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
-        .dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+        .live-dot.active { background: var(--success); box-shadow: 0 0 10px var(--success); }
 
-        /* Real-Time Classifier Signal Badge */
-        .classifier-card {
-            background: #1f2937;
-            border: 1px solid var(--border);
+        /* Dynamic Signal Classifier Card */
+        .classifier-banner {
+            background: #0f172a;
+            border: 1px solid #334155;
             border-radius: 10px;
             padding: 10px 14px;
             margin-bottom: 12px;
@@ -71,16 +72,18 @@
             border-radius: 6px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            transition: all 0.2s ease;
         }
-        .tag-normal { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); }
-        .tag-pothole { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid var(--danger); }
-        .tag-speedbump { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid var(--warning); }
+        .tag-normal { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); border: 1px solid rgba(56, 189, 248, 0.4); }
+        .tag-pothole { background: rgba(239, 68, 68, 0.25); color: #fca5a5; border: 1px solid var(--danger); box-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+        .tag-speedbump { background: rgba(245, 158, 11, 0.25); color: #fcd34d; border: 1px solid var(--warning); }
 
+        /* Telemetry Metric Cards Grid */
         .telemetry-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
         .metric-card {
             background: var(--bg-card);
@@ -89,15 +92,16 @@
             border-radius: 10px;
             text-align: center;
         }
-        .metric-val { font-size: 1.5rem; font-weight: 800; font-family: monospace; color: #fff; }
+        .metric-val { font-size: 1.45rem; font-weight: 800; font-family: monospace; color: #fff; }
         .metric-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 4px; }
 
-        .chart-container {
+        /* Live Canvas Waveform Container */
+        .chart-box {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 10px;
             padding: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -105,56 +109,61 @@
         .chart-header {
             display: flex;
             justify-content: space-between;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             color: var(--text-muted);
             margin-bottom: 8px;
             font-weight: 600;
         }
         canvas {
             width: 100%;
-            height: 140px;
-            background: #0b0f19;
+            height: 135px;
+            background: #020617;
             border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.06);
         }
 
-        .controls {
+        .controls-group {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
         }
         .btn {
             width: 100%;
-            padding: 14px;
+            padding: 13px;
             border-radius: 8px;
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             font-weight: 700;
             border: none;
             cursor: pointer;
             transition: 0.15s ease;
             text-align: center;
             text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
-        .btn-start { background: var(--accent-blue); color: #fff; }
-        .btn-start.recording { background: var(--danger); }
-        .btn-portal { background: var(--bg-card); border: 1px solid var(--border); color: var(--accent-cyan); font-size: 0.8rem; padding: 10px; }
+        .btn-stream { background: var(--accent-blue); color: #fff; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35); }
+        .btn-stream.active { background: var(--danger); box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35); }
+        .btn-portal { background: #1e293b; border: 1px solid #334155; color: var(--accent-cyan); font-size: 0.8rem; padding: 10px; }
+        .btn-portal:hover { background: #334155; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>AIKYA Sensor Node</h1>
-        <p>Real-Time Road Roughness & Impact Telemetry</p>
-        <div class="status-badge">
-            <span class="dot" id="statusDot"></span>
-            <span id="statusText">Sensor Idle</span>
+        <h1>AIKYA Telemetry Edge Node</h1>
+        <p>50Hz Vibration & Road Anomaly Classifier</p>
+        <div class="status-pill">
+            <span class="live-dot" id="statusDot"></span>
+            <span id="statusText">Sensor Node Offline</span>
         </div>
     </header>
 
-    <!-- Edge AI Dual-Phase Classifier -->
-    <div class="classifier-card">
+    <!-- Edge AI Feature Signal Tag -->
+    <div class="classifier-banner">
         <div style="font-size: 0.75rem; color: #cbd5e1; font-weight: 600;">
-            Edge Feature Classifier:
+            Dual-Phase Anomaly Filter:
         </div>
         <div class="classifier-tag tag-normal" id="classifierTag">Normal Road</div>
     </div>
@@ -173,36 +182,36 @@
             <div class="metric-lbl">Speed (km/h)</div>
         </div>
         <div class="metric-card">
-            <div class="metric-val" id="valGPS" style="font-size: 0.85rem; padding-top: 6px;">--</div>
-            <div class="metric-lbl">GPS Coordinates</div>
+            <div class="metric-val" id="valGPS" style="font-size: 0.8rem; padding-top: 5px;">--</div>
+            <div class="metric-lbl">GPS Geotag</div>
         </div>
     </div>
 
-    <div class="chart-container">
+    <div class="chart-box">
         <div class="chart-header">
-            <span>50Hz Accelerometer Waveform (Z-Axis)</span>
-            <span style="color: var(--danger);">Threshold: 12.0 m/s²</span>
+            <span>Real-Time Z-Axis Oscillogram</span>
+            <span style="color: var(--danger);">Spike Trigger: 11.8 m/s²</span>
         </div>
         <canvas id="waveformCanvas"></canvas>
     </div>
 
-    <div class="controls">
-        <button class="btn btn-start" id="btnToggle" onclick="toggleTelemetry()">🚀 Start Sensor Stream</button>
+    <div class="controls-group">
+        <button class="btn btn-stream" id="btnToggle" onclick="toggleTelemetry()">🚀 Start Sensor Stream</button>
         <a href="/" class="btn btn-portal">🗺️ Return to PWD Dashboard</a>
     </div>
 
     <script>
         let isRunning = false;
         let deviceId = "NODE-" + Math.floor(1000 + Math.random() * 9000);
-        let gpsLat = 12.8231, gpsLng = 80.0451, currentSpeed = 0.0;
+        let gpsLat = 12.8231, gpsLng = 80.0451, currentSpeed = 26.5;
         let zRawBuffer = [];
         let spikeCount = 0;
         let geoWatchId = null;
-        let lastSignedZ = 0;
+        let recentZ = [];
 
         const canvas = document.getElementById('waveformCanvas');
         const ctx = canvas.getContext('2d');
-        let waveHistory = new Array(80).fill(0);
+        let waveHistory = new Array(90).fill(0);
 
         function resizeCanvas() {
             canvas.width = canvas.clientWidth * window.devicePixelRatio;
@@ -220,20 +229,22 @@
             const h = canvas.clientHeight;
             ctx.clearRect(0, 0, w, h);
 
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+            // Center threshold guidelines
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(0, h / 2);
             ctx.lineTo(w, h / 2);
             ctx.stroke();
 
-            ctx.strokeStyle = newVal > 12.0 ? "#ef4444" : "#38bdf8";
-            ctx.lineWidth = 2;
+            // Render Dynamic Waveform
+            ctx.strokeStyle = newVal > 11.8 ? "#ef4444" : "#38bdf8";
+            ctx.lineWidth = newVal > 11.8 ? 2.5 : 1.8;
             ctx.beginPath();
             const step = w / (waveHistory.length - 1);
 
             for (let i = 0; i < waveHistory.length; i++) {
-                const normalized = (waveHistory[i] / 25.0) * (h / 2);
+                const normalized = (waveHistory[i] / 24.0) * (h / 2);
                 const y = (h / 2) - normalized;
                 if (i === 0) ctx.moveTo(0, y);
                 else ctx.lineTo(i * step, y);
@@ -241,10 +252,16 @@
             ctx.stroke();
         }
 
+        // iOS 13+ & Android Permission Handler
         async function requestMotionPermission() {
             if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-                const response = await DeviceMotionEvent.requestPermission();
-                return response === 'granted';
+                try {
+                    const permissionState = await DeviceMotionEvent.requestPermission();
+                    return permissionState === 'granted';
+                } catch (err) {
+                    console.warn("iOS Permission Error:", err);
+                    return false;
+                }
             }
             return true;
         }
@@ -252,25 +269,30 @@
         async function toggleTelemetry() {
             if (!isRunning) {
                 const granted = await requestMotionPermission();
-                if (!granted) return alert("Motion sensor access denied.");
+                if (!granted) {
+                    alert("Please allow sensor access in browser permissions.");
+                    return;
+                }
 
                 window.addEventListener('devicemotion', handleMotion);
                 startGPS();
 
                 isRunning = true;
                 document.getElementById('btnToggle').innerText = "🛑 Stop Telemetry Stream";
-                document.getElementById('btnToggle').classList.add('recording');
+                document.getElementById('btnToggle').classList.add('active');
                 document.getElementById('statusDot').classList.add('active');
-                document.getElementById('statusText').innerText = "Streaming 50Hz Data";
+                document.getElementById('statusText').innerText = "Streaming at 50Hz (Active)";
             } else {
                 window.removeEventListener('devicemotion', handleMotion);
                 if (geoWatchId) navigator.geolocation.clearWatch(geoWatchId);
 
                 isRunning = false;
                 document.getElementById('btnToggle').innerText = "🚀 Start Sensor Stream";
-                document.getElementById('btnToggle').classList.remove('recording');
+                document.getElementById('btnToggle').classList.remove('active');
                 document.getElementById('statusDot').classList.remove('active');
-                document.getElementById('statusText').innerText = "Sensor Idle";
+                document.getElementById('statusText').innerText = "Sensor Node Offline";
+                document.getElementById('classifierTag').className = "classifier-tag tag-normal";
+                document.getElementById('classifierTag').innerText = "Normal Road";
             }
         }
 
@@ -278,20 +300,25 @@
             const acc = event.accelerationIncludingGravity || event.acceleration;
             if (!acc || acc.z === null) return;
 
-            const signedZ = acc.z - 9.81; // Gravity detrended signed delta
+            const signedZ = acc.z - 9.81; // Gravity removal
             const zMag = Math.abs(signedZ);
             document.getElementById('valZ').innerText = zMag.toFixed(2);
             drawWaveform(zMag);
 
-            // Real-Time Pothole vs Speed Bump Dual-Phase Classifier
+            // Sliding window analysis for Speed-bump vs Pothole
+            recentZ.push(signedZ);
+            if (recentZ.length > 6) recentZ.shift();
+
             const tagEl = document.getElementById('classifierTag');
-            if (zMag > 11.5) {
-                if (signedZ < -3.0 || lastSignedZ < -2.5) {
-                    // Negative dip followed by impact = Pothole Crater
+            if (zMag > 11.8) {
+                const hasNegativeDip = recentZ.some(val => val < -2.2);
+                if (hasNegativeDip) {
+                    // Pothole Crater Impact
                     tagEl.className = "classifier-tag tag-pothole";
-                    tagEl.innerText = "CRATER / POTHOLE DETECTED";
+                    tagEl.innerText = "CRATER IMPACT (LOGGED)";
+                    if (navigator.vibrate) navigator.vibrate(100);
                 } else {
-                    // Gradual elevation arc = Speed Breaker (Filtered)
+                    // Speed Bump Smooth Rise
                     tagEl.className = "classifier-tag tag-speedbump";
                     tagEl.innerText = "SPEED BUMP (FILTERED)";
                 }
@@ -300,7 +327,6 @@
                 tagEl.innerText = "NORMAL ROAD";
             }
 
-            lastSignedZ = signedZ;
             zRawBuffer.push(zMag);
 
             if (zRawBuffer.length >= 25) {
@@ -314,11 +340,16 @@
                 geoWatchId = navigator.geolocation.watchPosition((pos) => {
                     gpsLat = pos.coords.latitude;
                     gpsLng = pos.coords.longitude;
-                    currentSpeed = pos.coords.speed ? (pos.coords.speed * 3.6) : 24.5;
+                    currentSpeed = pos.coords.speed ? (pos.coords.speed * 3.6) : 28.4;
 
                     document.getElementById('valSpeed').innerText = currentSpeed.toFixed(1);
                     document.getElementById('valGPS').innerText = `${gpsLat.toFixed(4)}, ${gpsLng.toFixed(4)}`;
-                }, (err) => console.warn(err), { enableHighAccuracy: true });
+                }, (err) => {
+                    // Smart Fallback for Indoor Testing
+                    gpsLat = 12.8231 + (Math.random() - 0.5) * 0.001;
+                    gpsLng = 80.0451 + (Math.random() - 0.5) * 0.001;
+                    document.getElementById('valGPS').innerText = `${gpsLat.toFixed(4)}, ${gpsLng.toFixed(4)} (Sim)`;
+                }, { enableHighAccuracy: true, timeout: 5000 });
             }
         }
 
@@ -341,7 +372,7 @@
                     document.getElementById('valSpikes').innerText = spikeCount;
                 }
             } catch (err) {
-                console.error("Transmission error:", err);
+                console.error("Telemetry error:", err);
             }
         }
     </script>
