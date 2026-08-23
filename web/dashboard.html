@@ -332,15 +332,6 @@
         .btn-action-panel.btn-cyan:hover {
             background: #0369a1;
         }
-        .btn-action-panel.btn-optimizer {
-            background: #4f46e5;
-            border-color: #6366f1;
-            color: #ffffff;
-            box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
-        }
-        .btn-action-panel.btn-optimizer:hover {
-            background: #4338ca;
-        }
 
         .leaflet-popup-content-wrapper {
             background: #0f172a;
@@ -527,7 +518,6 @@
         </div>
 
         <div class="actions-group">
-            <button class="btn-action-panel btn-optimizer" onclick="optimizeFleetDispatchRoute()">⚡ Optimize Multi-Stop Fleet Route</button>
             <button class="btn-action-panel" onclick="exportNativeXLSX()">📊 Export PWD Manifest (.xlsx)</button>
             <a href="/report" class="btn-action-panel btn-cyan">📢 Citizen Grievance Portal</a>
             <a href="/sensor" target="_blank" class="btn-action-panel">📱 Sensor Node</a>
@@ -844,59 +834,6 @@
                 map.fitBounds(activeRouteLayer.getBounds(), { padding: [40, 40] });
             } catch (err) {
                 console.error("Routing error:", err);
-            }
-        };
-
-        // Multi-Stop TSP Fleet Route Optimizer + Automatic Google Maps Multi-Waypoint Launch
-        window.optimizeFleetDispatchRoute = async function() {
-            const unresolvedTargets = allPotholes.filter(p => p.status !== 'resolved').slice(0, 8);
-            if (unresolvedTargets.length === 0) return alert("All defects are resolved. Fleet at rest.");
-
-            // 1. Build Multi-Waypoint Google Maps URL
-            const originStr = `${DEPOT_COORDS[0]},${DEPOT_COORDS[1]}`;
-            const destTarget = unresolvedTargets[unresolvedTargets.length - 1];
-            const destinationStr = `${destTarget.lat.toFixed(5)},${destTarget.lng.toFixed(5)}`;
-            
-            const waypointsList = unresolvedTargets.slice(0, -1).map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`);
-            const waypointsParam = waypointsList.length > 0 ? `&waypoints=${encodeURIComponent(waypointsList.join('|'))}` : '';
-            
-            const gmapsMultiStopUrl = `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destinationStr}${waypointsParam}&travelmode=driving`;
-
-            // 2. Open Google Maps in a new tab for field crew navigation
-            window.open(gmapsMultiStopUrl, '_blank');
-
-            // 3. Render Multi-Stop GeoJSON Polyline on the Command Map
-            let coordsStr = `${DEPOT_COORDS[1]},${DEPOT_COORDS[0]};` + unresolvedTargets.map(p => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
-            
-            try {
-                const url = `https://router.project-osrm.org/trip/v1/driving/${coordsStr}?source=first&roundtrip=true&overview=full&geometries=geojson`;
-                const res = await fetch(url);
-                const data = await res.json();
-
-                if (!data.trips || data.trips.length === 0) {
-                    const fallbackUrl = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
-                    const fRes = await fetch(fallbackUrl);
-                    const fData = await fRes.json();
-                    if (fData.routes && fData.routes.length > 0) {
-                        if (activeRouteLayer) map.removeLayer(activeRouteLayer);
-                        activeRouteLayer = L.geoJSON(fData.routes[0].geometry, {
-                            style: { color: '#6366f1', weight: 6, opacity: 0.9, dashArray: '1, 6', lineCap: 'round' }
-                        }).addTo(map);
-                        map.fitBounds(activeRouteLayer.getBounds(), { padding: [40, 40] });
-                    }
-                    return;
-                }
-
-                const trip = data.trips[0];
-                if (activeRouteLayer) map.removeLayer(activeRouteLayer);
-
-                activeRouteLayer = L.geoJSON(trip.geometry, {
-                    style: { color: '#6366f1', weight: 6, opacity: 0.95, dashArray: '1, 6', lineCap: 'round' }
-                }).addTo(map);
-
-                map.fitBounds(activeRouteLayer.getBounds(), { padding: [40, 40] });
-            } catch (err) {
-                console.error("Local route overlay error:", err);
             }
         };
 
