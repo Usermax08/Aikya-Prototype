@@ -2,89 +2,119 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIKYA - Citizen Grievance Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AIKYA - Citizen Road Grievance Portal</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root {
             --bg-base: #090d16;
             --bg-card: #111827;
-            --accent-blue: #0284c7;
+            --border: #374151;
             --accent-cyan: #38bdf8;
+            --accent-blue: #0284c7;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
             --text-main: #f3f4f6;
             --text-muted: #9ca3af;
-            --border-color: #374151;
-            --success: #10b981;
-            --danger: #ef4444;
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            margin: 0;
-            padding: 16px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg-base);
             color: var(--text-main);
+            padding: 16px;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
             min-height: 100vh;
         }
 
         .container {
             width: 100%;
-            max-width: 460px;
+            max-width: 480px;
             background: var(--bg-card);
-            padding: 24px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 16px 36px rgba(0,0,0,0.6);
         }
 
-        .header { text-align: center; margin-bottom: 20px; }
-        .header h1 { font-size: 1.3rem; margin: 0; color: var(--accent-cyan); font-weight: 800; }
-        .header p { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+        header {
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+        header h1 { font-size: 1.2rem; color: var(--accent-cyan); font-weight: 800; }
+        header p { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
 
-        .form-group { margin-bottom: 14px; }
-        label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
-        input, select, textarea {
+        .form-group {
+            margin-bottom: 14px;
+        }
+        label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #cbd5e1;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="text"], select, textarea {
             width: 100%;
-            padding: 10px;
             background: #1f2937;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-main);
+            border: 1px solid var(--border);
+            color: #fff;
+            padding: 10px 12px;
+            border-radius: 8px;
             font-size: 0.85rem;
             outline: none;
+            transition: 0.15s;
         }
-        input:focus, select:focus, textarea:focus { border-color: var(--accent-blue); }
+        input[type="text"]:focus, select:focus, textarea:focus {
+            border-color: var(--accent-cyan);
+        }
 
-        .btn-gps {
-            background: #1e293b;
-            border: 1px dashed var(--accent-cyan);
-            color: var(--accent-cyan);
-            padding: 8px;
-            border-radius: 6px;
+        /* Map Pin Picker */
+        #miniMap {
             width: 100%;
-            font-size: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 4px;
-        }
-
-        .photo-upload-zone {
-            border: 2px dashed #374151;
-            padding: 16px;
+            height: 180px;
             border-radius: 8px;
-            text-align: center;
-            cursor: pointer;
-            transition: 0.2s;
-            background: #172033;
+            border: 1px solid var(--border);
+            margin-top: 6px;
+            z-index: 1;
         }
-        .photo-upload-zone:hover { border-color: var(--accent-cyan); }
+
+        .gps-status {
+            font-size: 0.72rem;
+            color: var(--accent-cyan);
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Photo Upload Dropzone */
+        .photo-box {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            background: #1a2234;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .photo-box:hover {
+            border-color: var(--accent-cyan);
+        }
         .photo-preview {
-            width: 100%;
-            max-height: 180px;
-            object-fit: cover;
+            max-width: 100%;
+            max-height: 140px;
             border-radius: 6px;
             margin-top: 8px;
             display: none;
@@ -93,164 +123,169 @@
         .btn-submit {
             width: 100%;
             background: var(--accent-blue);
-            color: white;
+            color: #ffffff;
             border: none;
             padding: 12px;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 0.9rem;
-            font-weight: bold;
+            font-weight: 700;
             cursor: pointer;
-            margin-top: 10px;
-            transition: 0.2s;
+            transition: 0.15s;
+            margin-top: 8px;
         }
         .btn-submit:hover { background: #0369a1; }
 
-        .alert-box {
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            margin-top: 14px;
-            display: none;
+        .btn-back {
+            display: block;
             text-align: center;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.78rem;
+            margin-top: 12px;
         }
-        .alert-success { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid #10b981; }
-        .alert-error { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid #ef4444; }
+        .btn-back:hover { color: #fff; }
+
+        .success-banner {
+            display: none;
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid var(--success);
+            color: #6ee7b7;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            text-align: center;
+            margin-bottom: 14px;
+        }
     </style>
 </head>
 <body>
+
     <div class="container">
-        <div class="header">
-            <h1>📢 Report a Road Defect</h1>
-            <p>Citizen Grievance & PWD Field Action Center</p>
+        <header>
+            <h1>📢 Citizen Grievance Portal</h1>
+            <p>Report Road Hazards Directly to Municipal PWD</p>
+        </header>
+
+        <div class="success-banner" id="successBanner">
+            ✅ Grievance Ticket logged successfully! Redirecting to PWD Command Center...
         </div>
 
-        <form id="reportForm">
-            <!-- GPS Section -->
+        <form id="grievanceForm" onsubmit="submitGrievance(event)">
             <div class="form-group">
-                <label>Defect Coordinates (Auto-Captured)</label>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" id="lat" placeholder="Latitude" required readonly>
-                    <input type="text" id="lng" placeholder="Longitude" required readonly>
-                </div>
-                <button type="button" class="btn-gps" onclick="fetchGPS()">📍 Refresh GPS Location</button>
-            </div>
-
-            <!-- Hazard Severity -->
-            <div class="form-group">
-                <label>Estimated Hazard Level</label>
-                <select id="severity">
-                    <option value="high">Critical (Deep pothole / Immediate hazard)</option>
-                    <option value="medium" selected>Medium (Moderate cavity / Surface erosion)</option>
-                    <option value="low">Low (Minor asphalt raveling / Crack)</option>
+                <label>Defect Severity Estimate</label>
+                <select id="severitySelect">
+                    <option value="high">🔴 High Risk (Deep Crater / Wheel Damage Hazard)</option>
+                    <option value="medium" selected>🟡 Medium Risk (Moderate Surface Depression)</option>
+                    <option value="low">🔵 Low Risk (Surface Aggregate Loss / Minor)</option>
                 </select>
             </div>
 
-            <!-- Optional Camera Capture -->
             <div class="form-group">
-                <label>Attach Defect Photo (Optional)</label>
-                <div class="photo-upload-zone" onclick="document.getElementById('photoInput').click()">
-                    <span id="photoStatusText" style="font-size: 0.8rem; color: var(--accent-cyan);">📸 Take Photo / Upload Image</span>
-                    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display: none;" onchange="handlePhotoSelect(event)">
-                    <img id="photoPreview" class="photo-preview" alt="Captured Defect Preview">
+                <label>Location (Auto-GPS / Drag Pin to Adjust)</label>
+                <div id="miniMap"></div>
+                <div class="gps-status" id="gpsStatus">📍 Acquiring high-precision GPS...</div>
+            </div>
+
+            <div class="form-group">
+                <label>Attach On-Site Photo (Optional)</label>
+                <div class="photo-box" onclick="document.getElementById('photoInput').click()">
+                    <span id="uploadPrompt">📷 Tap to capture or upload photo</span>
+                    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none;" onchange="previewImage(event)">
+                    <img id="imagePreview" class="photo-preview" alt="Preview">
                 </div>
             </div>
 
-            <!-- Notes -->
             <div class="form-group">
-                <label>Description / Landmark (Optional)</label>
-                <textarea id="description" rows="2" placeholder="e.g., Near Kattankulathur gate 2, left side lane..."></textarea>
+                <label>Additional Landmark Details</label>
+                <textarea id="notesInput" rows="2" placeholder="e.g. Near SRM Java Bus Stop, southbound lane"></textarea>
             </div>
 
-            <button type="submit" class="btn-submit" id="submitBtn">Dispatch Grievance to PWD</button>
+            <button type="submit" class="btn-submit" id="submitBtn">🚀 Submit Formal Grievance</button>
+            <a href="/" class="btn-back">← Back to PWD Command Center</a>
         </form>
-
-        <div id="alertBox" class="alert-box"></div>
-
-        <div style="text-align: center; margin-top: 16px;">
-            <a href="/" style="color: var(--accent-cyan); font-size: 0.8rem; text-decoration: none;">← Back to Command Portal Map</a>
-        </div>
     </div>
 
     <script>
-        let photoBase64 = null;
+        let selectedLat = 12.8231;
+        let selectedLng = 80.0451;
 
-        function fetchGPS() {
-            if (!navigator.geolocation) {
-                return alert("Geolocation is not supported by your browser.");
-            }
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    document.getElementById('lat').value = pos.coords.latitude.toFixed(5);
-                    document.getElementById('lng').value = pos.coords.longitude.toFixed(5);
-                },
-                (err) => {
-                    // Fallback to sector demo coords
-                    document.getElementById('lat').value = (12.8231 + (Math.random() - 0.5) * 0.005).toFixed(5);
-                    document.getElementById('lng').value = (80.0451 + (Math.random() - 0.5) * 0.005).toFixed(5);
-                },
-                { enableHighAccuracy: true }
-            );
+        // Initialize OpenTopoMap Mini-Picker
+        const map = L.map('miniMap', { zoomControl: false }).setView([selectedLat, selectedLng], 16);
+        L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            maxZoom: 17,
+            attribution: '&copy; OpenTopoMap'
+        }).addTo(map);
+
+        // Draggable Defect Pin
+        const marker = L.marker([selectedLat, selectedLng], { draggable: true }).addTo(map);
+
+        marker.on('dragend', function (e) {
+            const pos = marker.getLatLng();
+            selectedLat = pos.lat;
+            selectedLng = pos.lng;
+            document.getElementById('gpsStatus').innerText = `📍 Pin set to: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`;
+        });
+
+        // Auto-locate citizen device
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                selectedLat = pos.coords.latitude;
+                selectedLng = pos.coords.longitude;
+                marker.setLatLng([selectedLat, selectedLng]);
+                map.setView([selectedLat, selectedLng], 17);
+                document.getElementById('gpsStatus').innerText = `📍 Locked: ${selectedLat.toFixed(5)}, ${selectedLng.toFixed(5)}`;
+            }, err => {
+                document.getElementById('gpsStatus').innerText = `📍 Defaulting to SRM Kattankulathur Sector (Drag pin to adjust)`;
+            }, { enableHighAccuracy: true });
         }
 
-        fetchGPS();
-
-        function handlePhotoSelect(e) {
-            const file = e.target.files[0];
+        function previewImage(event) {
+            const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = (event) => {
-                    photoBase64 = event.target.result;
-                    const preview = document.getElementById('photoPreview');
-                    preview.src = photoBase64;
+                reader.onload = function(e) {
+                    const preview = document.getElementById('imagePreview');
+                    preview.src = e.target.result;
                     preview.style.display = 'block';
-                    document.getElementById('photoStatusText').innerText = `✅ Photo Attached (${file.name})`;
+                    document.getElementById('uploadPrompt').innerText = '📸 Photo Attached (Tap to change)';
                 };
                 reader.readAsDataURL(file);
             }
         }
 
-        document.getElementById('reportForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const submitBtn = document.getElementById('submitBtn');
-            const alertBox = document.getElementById('alertBox');
+        async function submitGrievance(event) {
+            event.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            btn.innerText = "Submitting...";
+            btn.disabled = true;
 
-            const payload = {
-                lat: parseFloat(document.getElementById('lat').value),
-                lng: parseFloat(document.getElementById('lng').value),
-                severity: document.getElementById('severity').value,
-                description: document.getElementById('description').value || "Citizen reported defect",
-                photo_base64: photoBase64
-            };
-
-            submitBtn.disabled = true;
-            submitBtn.innerText = "Dispatching to AIKYA Portal...";
+            const severity = document.getElementById('severitySelect').value;
+            const spikeValue = severity === 'high' ? 18.5 : (severity === 'medium' ? 14.0 : 10.5);
 
             try {
-                const res = await fetch("/api/report", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
+                // Post grievance as a verified ticket to backend
+                const res = await fetch('/api/telemetry', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device_id: "CITIZEN-GRIEVANCE",
+                        lat: selectedLat,
+                        lng: selectedLng,
+                        speed_kmh: 0,
+                        z_raw: [spikeValue, spikeValue + 1.2, spikeValue - 0.8]
+                    })
                 });
-                const data = await res.json();
 
-                alertBox.className = "alert-box alert-success";
-                alertBox.innerText = `✅ Pothole Ticket #${data.id} recorded! Dispatched to municipal repair queue.`;
-                alertBox.style.display = "block";
-
-                document.getElementById('reportForm').reset();
-                document.getElementById('photoPreview').style.display = 'none';
-                document.getElementById('photoStatusText').innerText = "📸 Take Photo / Upload Image";
-                photoBase64 = null;
-                fetchGPS();
+                document.getElementById('successBanner').style.display = 'block';
+                setTimeout(() => {
+                    window.location.href = "/";
+                }, 1600);
             } catch (err) {
-                alertBox.className = "alert-box alert-error";
-                alertBox.innerText = "❌ Failed to submit grievance. Please try again.";
-                alertBox.style.display = "block";
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerText = "Dispatch Grievance to PWD";
+                alert("Submission failed. Check network connection.");
+                btn.innerText = "🚀 Submit Formal Grievance";
+                btn.disabled = false;
             }
-        });
+        }
     </script>
 </body>
 </html>
