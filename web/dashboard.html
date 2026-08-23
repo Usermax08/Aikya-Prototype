@@ -6,6 +6,8 @@
     <title>AIKYA PWD Portal - SRMIST NODE</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- SheetJS for Native .XLSX Excel Generation -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             --bg-glass: rgba(15, 23, 42, 0.88);
@@ -198,7 +200,7 @@
         }
         .btn-citizen:hover { background: #0369a1; }
 
-        /* Playbook Modal */
+        /* Incident Playbook Modal */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -255,7 +257,6 @@
 
     <div id="map"></div>
 
-    <!-- Floating Glassmorphism Admin Dashboard Panel -->
     <div class="glass-panel">
         <div class="header-title">
             <h1>AIKYA PWD Portal</h1>
@@ -281,19 +282,19 @@
         </div>
 
         <div class="defect-list" id="defectsList">
-            <!-- Dynamic Ticket Rows -->
+            <!-- Dynamic defect cards -->
         </div>
 
         <div class="actions-group">
-            <button class="btn-manifest" onclick="exportManifestXLSX()">📊 Export PWD Manifest (.xlsx)</button>
+            <button class="btn-manifest" onclick="exportNativeXLSX()">📊 Export PWD Manifest (.xlsx)</button>
             <a href="/report" class="btn-citizen">📢 Citizen Grievance Portal</a>
         </div>
     </div>
 
-    <!-- Incident Playbook Modal -->
+    <!-- Playbook Modal -->
     <div class="modal-overlay" id="playbookModal">
         <div class="playbook-card">
-            <h2 id="modal-title">Incident Playbook // Ticket #--</h2>
+            <h2 id="modal-title">Incident Playbook // PWD-DEF-0001</h2>
             <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 14px;">Automated Remediation Estimation & Material Dispatch Specs</p>
             
             <div class="playbook-row">
@@ -327,7 +328,6 @@
         let markers = {};
         let activeSelectedId = null;
 
-        // Satellite view centered on Kattankulathur
         const map = L.map('map', { zoomControl: false }).setView([12.8231, 80.0451], 15);
         L.control.zoom({ position: 'topright' }).addTo(map);
 
@@ -369,7 +369,7 @@
                 if (p.status !== 'resolved') activeCount++;
                 if (p.status === 'verified') verifiedCount++;
 
-                const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
+                const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving`;
 
                 if (!markers[p.id]) {
                     const circle = L.circleMarker([p.lat, p.lng], {
@@ -440,7 +440,7 @@
             document.getElementById('modal-title').innerText = `Incident Playbook // PWD-DEF-${String(p.id).padStart(4, '0')}`;
             document.getElementById('modal-strategy').innerText = p.status === 'resolved' ? 'No Action Required' : (p.severity === 'high' ? 'Deep Mill & Hot Fill' : (p.severity === 'medium' ? 'Edge Sealing & Patch' : 'Surface Leveling'));
             document.getElementById('modal-material').innerText = p.status === 'resolved' ? 'None (Auto-Verified)' : (p.severity === 'high' ? 'Bituminous Concrete (2.5 Bags)' : (p.severity === 'medium' ? 'Dense Aggregate + Rapid Patch' : 'Cold Mix Asphalt (0.5 Bag)'));
-            document.getElementById('modal-sla').innerText = p.status === 'resolved' ? 'Completed' : (p.severity === 'high' ? 'CRITICAL (Immediate)' : (p.severity === 'medium' ? 'MEDIUM (Scheduled)' : 'LOW (Monitoring)'));
+            document.getElementById('modal-sla').innerText = p.status === 'resolved' ? 'COMPLETED' : (p.severity === 'high' ? 'CRITICAL (Immediate)' : (p.severity === 'medium' ? 'MEDIUM (Scheduled)' : 'LOW (Monitoring)'));
             document.getElementById('modal-sla').style.color = p.severity === 'high' ? '#ef4444' : '#38bdf8';
 
             document.getElementById('playbookModal').style.display = 'flex';
@@ -455,25 +455,25 @@
             closeModal();
         }
 
-        // Exact 11-column PWD Work Order manifest export (.csv spreadsheet formatted)
-        function exportManifestXLSX() {
+        // Native .XLSX generator with explicit column sizing & unclipped date strings
+        function exportNativeXLSX() {
             if (allPotholes.length === 0) return alert("No defects to export.");
 
-            const headers = [
-                "Work Order ID",
-                "Defect Priority",
-                "Status",
-                "Vehicle Hits",
-                "Latitude",
-                "Longitude",
-                "Corridor Zone",
-                "Recommended Action",
-                "Bill of Material",
-                "Logged Time",
-                "Google Maps Link"
+            const data = [
+                [
+                    "Work Order ID",
+                    "Defect Priority",
+                    "Status",
+                    "Vehicle Hits",
+                    "Latitude",
+                    "Longitude",
+                    "Corridor Zone",
+                    "Recommended Action",
+                    "Bill of Material",
+                    "Logged Time",
+                    "Google Maps Link"
+                ]
             ];
-
-            let csvContent = "\uFEFF" + headers.join(",") + "\n";
 
             allPotholes.forEach(p => {
                 const workId = `PWD-DEF-${String(p.id).padStart(4, '0')}`;
@@ -499,29 +499,41 @@
                 const gmapsLink = `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving`;
                 const loggedTime = p.first_seen || "2026-08-22 20:09";
 
-                const row = [
+                data.push([
                     workId,
-                    `"${priority}"`,
+                    priority,
                     p.status.toUpperCase(),
-                    `"${p.hit_count} vehicles"`,
-                    p.lat.toFixed(5),
-                    p.lng.toFixed(5),
-                    `"SRM Kattankulathur"`,
-                    `"${action}"`,
-                    `"${bom}"`,
-                    `"${loggedTime}"`,
-                    `"${gmapsLink}"`
-                ];
-
-                csvContent += row.join(",") + "\n";
+                    `${p.hit_count} vehicles`,
+                    parseFloat(p.lat.toFixed(5)),
+                    parseFloat(p.lng.toFixed(5)),
+                    "SRM Kattankulathur",
+                    action,
+                    bom,
+                    loggedTime,
+                    gmapsLink
+                ]);
             });
 
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.setAttribute('href', url);
-            a.setAttribute('download', `AIKYA_PWD_Manifest_SRMIST.csv`);
-            a.click();
+            const ws = XLSX.utils.aoa_to_sheet(data);
+
+            // Set generous column widths so no text/date is ever clipped as '#######'
+            ws['!cols'] = [
+                { wch: 16 }, // Work Order ID
+                { wch: 22 }, // Defect Priority
+                { wch: 14 }, // Status
+                { wch: 14 }, // Vehicle Hits
+                { wch: 12 }, // Latitude
+                { wch: 12 }, // Longitude
+                { wch: 24 }, // Corridor Zone
+                { wch: 26 }, // Recommended Action
+                { wch: 34 }, // Bill of Material
+                { wch: 20 }, // Logged Time
+                { wch: 80 }  // Google Maps Link
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "PWD Work Orders");
+            XLSX.writeFile(wb, "AIKYA_PWD_Manifest_SRMIST.xlsx");
         }
 
         fetchPotholes();
