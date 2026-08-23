@@ -57,9 +57,42 @@
             display: flex;
             flex-direction: column;
             box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8);
-            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), max-height 0.35s ease;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
         }
 
+        /* Desktop Retraction Collapse State */
+        .glass-panel.desktop-collapsed {
+            transform: translateX(calc(-100% - 30px));
+        }
+
+        /* Desktop Collapse / Expand Toggle Button Attached to Panel Edge */
+        .desktop-toggle-btn {
+            position: absolute;
+            top: 24px;
+            right: -36px;
+            width: 36px;
+            height: 44px;
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-left: none;
+            border-radius: 0 10px 10px 0;
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 6px 4px 15px rgba(0,0,0,0.6);
+            transition: background 0.15s ease, color 0.15s ease;
+            z-index: 1001;
+            font-size: 0.95rem;
+            user-select: none;
+        }
+        .desktop-toggle-btn:hover {
+            background: #1e293b;
+            color: #ffffff;
+        }
+
+        /* Mobile Swipe Handle Bar */
         .drawer-handle-bar {
             display: none;
             width: 100%;
@@ -306,7 +339,7 @@
             background: #0369a1;
         }
 
-        /* Popup Customization */
+        /* Leaflet Popup Customization */
         .leaflet-popup-content-wrapper {
             background: #0f172a;
             color: #f8fafc;
@@ -376,8 +409,11 @@
         .checklist-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; margin-bottom: 8px; color: #e5e7eb; }
         .checklist-item input { accent-color: #0284c7; }
 
-        /* Mobile Retractable Bottom Sheet Layout */
+        /* Responsive Mobile Bottom Sheet */
         @media (max-width: 768px) {
+            .desktop-toggle-btn {
+                display: none !important;
+            }
             .glass-panel {
                 top: auto;
                 left: 0;
@@ -390,7 +426,7 @@
                 transform: translateY(0);
                 z-index: 1000;
             }
-            .glass-panel.collapsed {
+            .glass-panel.mobile-collapsed {
                 transform: translateY(calc(100% - 62px));
             }
             .drawer-handle-bar {
@@ -452,7 +488,12 @@
     <div id="map"></div>
 
     <div class="glass-panel" id="mainDashboardPanel">
-        <!-- Retractable Mobile Handle Bar -->
+        <!-- Desktop Retraction Toggle Tab Button -->
+        <div class="desktop-toggle-btn" id="desktopToggleBtn" onclick="toggleDesktopDrawer()" title="Collapse/Expand Portal">
+            ◀
+        </div>
+
+        <!-- Mobile Drawer Handle -->
         <div class="drawer-handle-bar" onclick="toggleMobileDrawer()">
             <div class="drawer-pill"></div>
             <div class="drawer-status-text" id="drawerStatusText">▼ Tap to Minimise</div>
@@ -503,6 +544,7 @@
                 <button class="no-print" onclick="closePlaybook()" style="background:none; border:none; color:#9ca3af; font-size:1.4rem; cursor:pointer;">✕</button>
             </div>
 
+            <!-- Printable Header Banner -->
             <div class="print-only" style="border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 14px; font-size: 0.8rem;">
                 <b>PUBLIC WORKS DEPARTMENT • ROAD INFRASTRUCTURE MONITORING & REPAIR MANIFEST</b>
             </div>
@@ -531,6 +573,7 @@
                 <label class="checklist-item"><input type="checkbox"> <b>5. Auto-Verification:</b> Telemetry pass will close ticket in AIKYA portal.</label>
             </div>
 
+            <!-- Printable Navigation QR and Signature Block -->
             <div class="print-only" style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 24px; border-top: 1px dashed #94a3b8; padding-top: 16px;">
                 <div style="font-size: 0.78rem;">
                     <b>Field Crew Navigation QR:</b><br>
@@ -588,15 +631,20 @@
         });
         L.marker(DEPOT_COORDS, { icon: depotIcon }).addTo(map).bindPopup("<b>PWD Central Fleet Depot</b><br>Dispatch HQ");
 
+        // Desktop Retract / Expand Drawer Handler
+        function toggleDesktopDrawer() {
+            const panel = document.getElementById('mainDashboardPanel');
+            const btn = document.getElementById('desktopToggleBtn');
+            panel.classList.toggle('desktop-collapsed');
+            btn.innerHTML = panel.classList.contains('desktop-collapsed') ? '▶' : '◀';
+        }
+
+        // Mobile Retract / Expand Drawer Handler
         function toggleMobileDrawer() {
             const panel = document.getElementById('mainDashboardPanel');
             const text = document.getElementById('drawerStatusText');
-            panel.classList.toggle('collapsed');
-            if (panel.classList.contains('collapsed')) {
-                text.innerText = '▲ Tap to Expand Portal';
-            } else {
-                text.innerText = '▼ Tap to Minimise';
-            }
+            panel.classList.toggle('mobile-collapsed');
+            text.innerText = panel.classList.contains('mobile-collapsed') ? '▲ Tap to Expand Portal' : '▼ Tap to Minimise';
         }
 
         function getMarkerColor(p) {
@@ -708,9 +756,11 @@
                 item.onclick = () => {
                     map.flyTo([p.lat, p.lng], 17, { animate: true, duration: 1 });
                     markers[p.id].openPopup();
+                    
+                    // Auto-collapse in mobile view upon selecting a ticket
                     if (window.innerWidth <= 768) {
                         const panel = document.getElementById('mainDashboardPanel');
-                        panel.classList.add('collapsed');
+                        panel.classList.add('mobile-collapsed');
                         document.getElementById('drawerStatusText').innerText = '▲ Tap to Expand Portal';
                     }
                 };
