@@ -338,10 +338,11 @@
         let markers = {};
         let activeSelectedId = null;
 
-        // Tile Layers: Original Clean Street Map + Satellite
-        const streetMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; CARTO &copy; OpenStreetMap',
-            maxZoom: 19
+        // Base Layer: Google Terrain with elevation contours & shaded relief (Standard Default)
+        const terrainMap = L.tileLayer('https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: '&copy; Google Maps'
         });
 
         const satelliteMap = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
@@ -349,18 +350,24 @@
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
 
-        // Initialize Map with Original Street Map View
+        const streetMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CARTO &copy; OpenStreetMap',
+            maxZoom: 19
+        });
+
+        // Initialize Map with Terrain as the Standard View
         const map = L.map('map', { 
             zoomControl: false, 
-            layers: [streetMap] 
+            layers: [terrainMap] 
         }).setView([12.8231, 80.0451], 15);
 
         L.control.zoom({ position: 'topright' }).addTo(map);
 
-        // Map layer switcher
+        // Layer Switcher in top right corner
         const baseMaps = {
-            "🗺️ Street Map": streetMap,
-            "🛰️ Satellite": satelliteMap
+            "⛰️ Terrain (Default)": terrainMap,
+            "🛰️ Satellite": satelliteMap,
+            "🗺️ Clean Streets": streetMap
         };
         L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
