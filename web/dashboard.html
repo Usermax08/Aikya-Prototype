@@ -819,7 +819,8 @@
                 if (p.status === 'resolved') resolvedCount++;
                 else activeCount++;
 
-                const gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${DEPOT_COORDS[0]},${DEPOT_COORDS[1]}&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving`;
+                // Option A: Direct Turn-by-Turn Navigation Link
+                const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving&dir_action=navigate`;
 
                 if (!markers[p.id]) {
                     const circle = L.circleMarker([p.lat, p.lng], {
@@ -914,7 +915,8 @@
             document.getElementById('modal-coords').innerText = `Coordinates: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} • SRM Kattankulathur Sector`;
             document.getElementById('modal-hits').innerText = `${p.hit_count} Cross-Vehicle Sensor Confirmations`;
 
-            const gmapsUrl = encodeURIComponent(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`);
+            // Option A: Direct Turn-by-Turn Navigation URL for Playbook QR
+            const gmapsUrl = encodeURIComponent(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving&dir_action=navigate`);
             document.getElementById('modalQrCode').src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${gmapsUrl}`;
 
             if (p.severity === 'high') {
@@ -994,7 +996,7 @@
                     "Recommended Action": action,
                     "Bill of Material": material,
                     "Logged Time": cleanDate,
-                    "Google Maps Link": `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving`
+                    "Google Maps Link": `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving&dir_action=navigate`
                 };
             });
 
