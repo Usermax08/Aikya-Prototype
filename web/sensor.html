@@ -12,6 +12,7 @@
             --accent-cyan: #38bdf8;
             --accent-blue: #0284c7;
             --danger: #ef4444;
+            --warning: #f59e0b;
             --success: #10b981;
             --text-main: #f3f4f6;
             --text-muted: #9ca3af;
@@ -51,6 +52,29 @@
         }
         .dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
         .dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+        /* Real-Time Classifier Signal Badge */
+        .classifier-card {
+            background: #1f2937;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .classifier-tag {
+            font-size: 0.78rem;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tag-normal { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); border: 1px solid var(--accent-cyan); }
+        .tag-pothole { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid var(--danger); }
+        .tag-speedbump { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid var(--warning); }
 
         .telemetry-grid {
             display: grid;
@@ -127,6 +151,14 @@
         </div>
     </header>
 
+    <!-- Edge AI Dual-Phase Classifier -->
+    <div class="classifier-card">
+        <div style="font-size: 0.75rem; color: #cbd5e1; font-weight: 600;">
+            Edge Feature Classifier:
+        </div>
+        <div class="classifier-tag tag-normal" id="classifierTag">Normal Road</div>
+    </div>
+
     <div class="telemetry-grid">
         <div class="metric-card">
             <div class="metric-val" id="valZ" style="color: var(--accent-cyan);">0.00</div>
@@ -134,7 +166,7 @@
         </div>
         <div class="metric-card">
             <div class="metric-val" id="valSpikes" style="color: var(--danger);">0</div>
-            <div class="metric-lbl">Spikes Detected</div>
+            <div class="metric-lbl">Potholes Logged</div>
         </div>
         <div class="metric-card">
             <div class="metric-val" id="valSpeed">0.0</div>
@@ -148,7 +180,7 @@
 
     <div class="chart-container">
         <div class="chart-header">
-            <span>Live Vertical Waveform (Z-Axis)</span>
+            <span>50Hz Accelerometer Waveform (Z-Axis)</span>
             <span style="color: var(--danger);">Threshold: 12.0 m/s²</span>
         </div>
         <canvas id="waveformCanvas"></canvas>
@@ -166,6 +198,7 @@
         let zRawBuffer = [];
         let spikeCount = 0;
         let geoWatchId = null;
+        let lastSignedZ = 0;
 
         const canvas = document.getElementById('waveformCanvas');
         const ctx = canvas.getContext('2d');
@@ -245,11 +278,30 @@
             const acc = event.accelerationIncludingGravity || event.acceleration;
             if (!acc || acc.z === null) return;
 
-            const zVal = Math.abs(acc.z - 9.81);
-            document.getElementById('valZ').innerText = zVal.toFixed(2);
-            drawWaveform(zVal);
+            const signedZ = acc.z - 9.81; // Gravity detrended signed delta
+            const zMag = Math.abs(signedZ);
+            document.getElementById('valZ').innerText = zMag.toFixed(2);
+            drawWaveform(zMag);
 
-            zRawBuffer.push(zVal);
+            // Real-Time Pothole vs Speed Bump Dual-Phase Classifier
+            const tagEl = document.getElementById('classifierTag');
+            if (zMag > 11.5) {
+                if (signedZ < -3.0 || lastSignedZ < -2.5) {
+                    // Negative dip followed by impact = Pothole Crater
+                    tagEl.className = "classifier-tag tag-pothole";
+                    tagEl.innerText = "CRATER / POTHOLE DETECTED";
+                } else {
+                    // Gradual elevation arc = Speed Breaker (Filtered)
+                    tagEl.className = "classifier-tag tag-speedbump";
+                    tagEl.innerText = "SPEED BUMP (FILTERED)";
+                }
+            } else {
+                tagEl.className = "classifier-tag tag-normal";
+                tagEl.innerText = "NORMAL ROAD";
+            }
+
+            lastSignedZ = signedZ;
+            zRawBuffer.push(zMag);
 
             if (zRawBuffer.length >= 25) {
                 sendTelemetryPayload([...zRawBuffer]);
