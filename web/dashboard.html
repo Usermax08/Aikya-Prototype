@@ -3,623 +3,684 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIKYA PWD Portal - SRMIST NODE</title>
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- SheetJS for Native .XLSX Excel Generation -->
+    <title>AIKYA - Municipal Pothole & Defect Command Center</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
-            --bg-glass: rgba(11, 19, 43, 0.95);
-            --border-glass: rgba(56, 189, 248, 0.25);
-            --accent-cyan: #38bdf8;
+            --bg-base: #090d16;
+            --bg-panel: #111827;
+            --bg-card: #1f2937;
+            --border-color: #374151;
             --accent-blue: #0284c7;
+            --accent-cyan: #38bdf8;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
             --danger: #ef4444;
             --warning: #f59e0b;
             --success: #10b981;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --card-bg: #1e293b;
         }
 
         * { box-sizing: border-box; }
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            width: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #020617;
-            overflow: hidden;
-        }
-
-        #map {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-
-        /* Floating Overlay Glass Card */
-        .glass-panel {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 400px;
-            max-height: calc(100vh - 40px);
-            background: var(--bg-glass);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            border: 1px solid var(--border-glass);
-            border-radius: 12px;
-            padding: 18px;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75);
-        }
-
-        .header-title {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        .header-title h1 {
-            font-size: 1.15rem;
-            margin: 0;
-            font-weight: 800;
-            color: #38bdf8;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .header-title h1::before {
-            content: "";
-            width: 9px;
-            height: 9px;
-            background: #10b981;
-            border-radius: 50%;
-            box-shadow: 0 0 8px #10b981;
-        }
-        .node-tag {
-            font-size: 0.65rem;
-            color: var(--text-muted);
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        /* 4-Stat Metric Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 6px;
-            margin-bottom: 14px;
-        }
-        .stat-card {
-            background: rgba(30, 41, 59, 0.65);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 8px 4px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .stat-val { font-size: 1.25rem; font-weight: 800; }
-        .stat-lbl { font-size: 0.58rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 2px; }
-
-        .filter-tabs {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 4px;
-            background: rgba(15, 23, 42, 0.7);
-            padding: 4px;
-            border-radius: 6px;
-            margin-bottom: 14px;
-        }
-        .filter-tab {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            font-size: 0.72rem;
-            font-weight: 600;
-            padding: 6px 0;
-            border-radius: 4px;
-            cursor: pointer;
-            text-align: center;
-        }
-        .filter-tab.active {
-            background: #0284c7;
-            color: #ffffff;
-        }
-
-        .defect-list-title {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: #cbd5e1;
-            margin-bottom: 8px;
-        }
-
-        .defect-list {
-            flex: 1;
-            overflow-y: auto;
-            margin-bottom: 12px;
-            padding-right: 4px;
-        }
-        .defect-item {
-            background: rgba(30, 41, 59, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            border-radius: 6px;
-            padding: 10px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            transition: 0.15s ease;
-        }
-        .defect-item:hover {
-            border-color: #38bdf8;
-            background: rgba(30, 41, 59, 0.9);
-        }
-        .defect-item-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.78rem;
-            font-weight: 800;
-            margin-bottom: 4px;
+        body { 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            display: flex; 
+            height: 100vh; 
+            background: var(--bg-base); 
+            color: var(--text-main); 
+            overflow: hidden; 
         }
         
-        .defect-badge {
-            font-size: 0.62rem;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: 800;
-            text-transform: uppercase;
+        #sidebar { 
+            width: 380px; 
+            background: var(--bg-panel); 
+            padding: 20px; 
+            border-right: 1px solid var(--border-color); 
+            display: flex; 
+            flex-direction: column; 
+            z-index: 1000; 
+            box-shadow: 4px 0 24px rgba(0,0,0,0.4); 
         }
-        .badge-high { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
-        .badge-medium { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
-        .badge-low { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; }
-        .badge-resolved { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+        #map { flex: 1; height: 100%; }
 
-        .defect-item-body {
-            font-size: 0.72rem;
-            color: var(--text-muted);
-            line-height: 1.4;
+        .header-title { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            border-bottom: 2px solid var(--accent-blue); 
+            padding-bottom: 12px; 
+            margin-bottom: 16px; 
+        }
+        .header-title h1 { 
+            font-size: 1.2rem; 
+            margin: 0; 
+            color: var(--accent-cyan); 
+            font-weight: 800; 
+            letter-spacing: 0.5px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+        }
+        .live-dot { 
+            width: 8px; 
+            height: 8px; 
+            background: var(--success); 
+            border-radius: 50%; 
+            display: inline-block; 
+            box-shadow: 0 0 8px var(--success); 
         }
 
-        .actions-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+        .stat-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 10px; 
+            margin-bottom: 14px; 
         }
-        .btn-manifest {
-            background: #1e293b;
-            border: 1px solid rgba(56, 189, 248, 0.3);
-            color: #f8fafc;
-            width: 100%;
-            padding: 9px;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            transition: 0.15s;
+        .stat-card { 
+            background: var(--bg-card); 
+            padding: 12px; 
+            border-radius: 8px; 
+            text-align: center; 
+            border: 1px solid var(--border-color); 
+            position: relative; 
+            overflow: hidden; 
         }
-        .btn-manifest:hover { background: #334155; border-color: #38bdf8; }
+        .stat-card::before { 
+            content: ""; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            right: 0; 
+            height: 3px; 
+            background: var(--accent-blue); 
+        }
+        .stat-card.resolved-card::before { background: var(--success); }
+        .stat-val { 
+            font-size: 1.6rem; 
+            font-weight: 800; 
+            color: var(--text-main); 
+            font-family: monospace; 
+        }
+        .stat-lbl { 
+            font-size: 0.68rem; 
+            color: var(--text-muted); 
+            text-transform: uppercase; 
+            font-weight: 600; 
+            margin-top: 4px; 
+            letter-spacing: 0.5px; 
+        }
 
-        .btn-citizen {
-            background: #0284c7;
-            border: none;
+        .route-info-card {
+            background: linear-gradient(135deg, #0284c7, #0369a1);
             color: #ffffff;
-            width: 100%;
-            padding: 9px;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            cursor: pointer;
-            text-align: center;
-            text-decoration: none;
-            display: block;
-        }
-        .btn-citizen:hover { background: #0369a1; }
-
-        /* Incident Playbook Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-        }
-        .playbook-card {
-            background: #0f172a;
-            border: 1px solid rgba(56, 189, 248, 0.3);
-            width: 90%;
-            max-width: 460px;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.8);
-            color: #f8fafc;
-        }
-        .playbook-card h2 { margin: 0 0 6px 0; font-size: 1.1rem; color: #38bdf8; }
-        .playbook-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; }
-        .playbook-row span:first-child { color: #94a3b8; }
-        .playbook-row span:last-child { font-weight: 600; color: #fff; }
-
-        /* Popup Customization */
-        .leaflet-popup-content-wrapper {
-            background: #0f172a;
-            color: #f8fafc;
-            border: 1px solid #334155;
+            padding: 10px 14px;
             border-radius: 8px;
+            margin-bottom: 14px;
+            font-size: 0.8rem;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
         }
-        .leaflet-popup-tip { background: #0f172a; }
-        .popup-title { font-size: 0.88rem; font-weight: 800; color: #38bdf8; margin-bottom: 4px; }
-        .popup-row { font-size: 0.75rem; color: #cbd5e1; margin-bottom: 3px; }
-        .popup-btn-group { display: flex; gap: 6px; margin-top: 10px; }
-        .popup-btn {
-            padding: 5px 8px;
-            border-radius: 4px;
-            font-size: 0.72rem;
-            font-weight: 700;
-            cursor: pointer;
-            border: none;
+
+        .filter-tabs { 
+            display: flex; 
+            gap: 4px; 
+            margin-bottom: 12px; 
+            background: var(--bg-base); 
+            padding: 3px; 
+            border-radius: 6px; 
+            border: 1px solid var(--border-color); 
+        }
+        .filter-btn { 
+            flex: 1; 
+            background: transparent; 
+            border: none; 
+            color: var(--text-muted); 
+            padding: 6px 2px; 
+            font-size: 0.72rem; 
+            font-weight: 600; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            transition: 0.2s; 
+            text-align: center; 
+        }
+        .filter-btn.active { background: var(--accent-blue); color: white; }
+        .filter-btn:hover:not(.active) { color: var(--text-main); }
+
+        .ticket-list { flex: 1; overflow-y: auto; padding-right: 4px; }
+        .ticket-list::-webkit-scrollbar { width: 4px; }
+        .ticket-list::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+
+        .ticket { 
+            background: var(--bg-card); 
+            border-left: 4px solid var(--text-muted); 
+            border-radius: 6px; 
+            padding: 12px; 
+            margin-bottom: 10px; 
+            font-size: 0.82rem; 
+            cursor: pointer; 
+            border-top: 1px solid rgba(255,255,255,0.03);
+            border-right: 1px solid rgba(255,255,255,0.03);
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+        .ticket:hover {
+            transform: translateY(-2px);
+            background: #283548;
+        }
+        .ticket.high { border-left-color: var(--danger); }
+        .ticket.medium { border-left-color: var(--warning); }
+        .ticket.low { border-left-color: var(--accent-cyan); }
+        .ticket.resolved { border-left-color: var(--success); opacity: 0.65; }
+        
+        .badge { 
+            display: inline-block; 
+            padding: 2px 6px; 
+            border-radius: 4px; 
+            font-size: 0.65rem; 
+            font-weight: 700; 
+            text-transform: uppercase; 
+            float: right; 
+        }
+        .badge-verified { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-resolved { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+        .actions-bar { 
+            padding-top: 12px; 
+            border-top: 1px solid var(--border-color); 
+            display: flex; 
+            flex-direction: column; 
+            gap: 6px; 
+        }
+        .btn-action { 
+            width: 100%; 
+            background: #1f2937; 
+            border: 1px solid var(--border-color); 
+            color: var(--text-main); 
+            padding: 8px; 
+            border-radius: 6px; 
+            font-size: 0.75rem; 
+            font-weight: 600; 
+            cursor: pointer; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 6px; 
+            transition: 0.2s; 
             text-decoration: none;
-            display: inline-flex;
+        }
+        .btn-action:hover { background: #374151; }
+        .btn-action.btn-citizen-action {
+            background: var(--accent-blue);
+            color: #ffffff;
+            border-color: var(--accent-blue);
+        }
+        .btn-action.btn-citizen-action:hover { background: #0369a1; }
+
+        .btn-route { 
+            display: block; 
+            width: 100%; 
+            background: var(--accent-blue); 
+            color: white; 
+            border: none; 
+            padding: 7px 10px; 
+            border-radius: 4px; 
+            margin-top: 6px; 
+            font-weight: bold; 
+            font-size: 0.75rem; 
+            cursor: pointer; 
+            text-align: center; 
+            text-decoration: none; 
+        }
+        .btn-route:hover { background: #0369a1; }
+        .btn-playbook { background: #4f46e5; }
+        .btn-playbook:hover { background: #4338ca; }
+        .btn-gmaps { background: #059669; }
+        .btn-gmaps:hover { background: #047857; }
+
+        .leaflet-control-layers { 
+            background: var(--bg-panel) !important; 
+            color: var(--text-main) !important; 
+            border: 1px solid var(--border-color) !important; 
+            border-radius: 8px !important; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; 
+        }
+        .leaflet-control-layers-base label { color: var(--text-main) !important; font-size: 0.8rem; }
+
+        /* Incident Playbook Modal UI */
+        #playbookModal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(3, 7, 18, 0.85);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
             align-items: center;
             justify-content: center;
-            flex: 1;
         }
-        .btn-route { background: #10b981; color: white; }
-        .btn-playbook { background: #0284c7; color: white; }
+        .modal-content {
+            background: #111827;
+            width: 90%;
+            max-width: 680px;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            color: #f3f4f6;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #374151; padding-bottom: 12px; margin-bottom: 16px; }
+        .modal-header h2 { margin: 0; font-size: 1.15rem; color: #38bdf8; }
+        .close-modal { background: none; border: none; font-size: 1.4rem; color: #9ca3af; cursor: pointer; }
+        .sop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .sop-card { background: #1f2937; padding: 12px; border-radius: 6px; border-left: 3px solid #0284c7; }
+        .sop-label { font-size: 0.68rem; color: #9ca3af; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+        .sop-value { font-size: 0.88rem; font-weight: 600; color: #f3f4f6; }
+        .checklist-box { background: #1f2937; padding: 14px; border-radius: 6px; margin-bottom: 16px; }
+        .checklist-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; margin-bottom: 8px; color: #e5e7eb; }
+        .checklist-item input { accent-color: #0284c7; }
 
-        .leaflet-control-layers {
-            background: #0f172a !important;
-            color: #f8fafc !important;
-            border: 1px solid #334155 !important;
-            border-radius: 8px !important;
-            padding: 6px 10px !important;
-            font-size: 0.75rem !important;
+        /* Print Styling: Converts into formal PWD Government Dispatch Manifest */
+        @media print {
+            body * { visibility: hidden !important; }
+            #playbookModal, #playbookModal * { visibility: visible !important; }
+            #playbookModal {
+                position: absolute !important;
+                left: 0 !important; top: 0 !important;
+                width: 100% !important; height: auto !important;
+                background: white !important;
+                color: black !important;
+                padding: 0 !important;
+                display: block !important;
+            }
+            .modal-content {
+                background: white !important;
+                color: black !important;
+                border: 2px solid #000 !important;
+                box-shadow: none !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 24px !important;
+            }
+            .close-modal, .no-print { display: none !important; }
+            .modal-header h2 { color: #000 !important; font-size: 1.4rem !important; }
+            .sop-card, .checklist-box {
+                background: #f8fafc !important;
+                color: #000 !important;
+                border: 1px solid #cbd5e1 !important;
+                border-left: 4px solid #0284c7 !important;
+            }
+            .sop-label { color: #475569 !important; }
+            .sop-value, .checklist-item { color: #000 !important; }
+            .print-only { display: block !important; }
         }
+        .print-only { display: none; }
     </style>
 </head>
 <body>
-
-    <div id="map"></div>
-
-    <div class="glass-panel">
+    <div id="sidebar">
         <div class="header-title">
-            <h1>AIKYA PWD Portal</h1>
-            <span class="node-tag">SRMIST NODE</span>
+            <h1><span class="live-dot"></span> AIKYA PWD Portal</h1>
+            <span style="font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">SRMIST NODE</span>
         </div>
 
-        <!-- 4-Stat Metric Counter Grid -->
-        <div class="stats-grid">
+        <div class="stat-grid">
             <div class="stat-card">
-                <div class="stat-val" id="count-active" style="color: var(--accent-cyan);">0</div>
-                <div class="stat-lbl">Active</div>
+                <div id="totalDefects" class="stat-val">0</div>
+                <div class="stat-lbl">Active Potholes</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-val" id="count-high" style="color: var(--danger);">0</div>
-                <div class="stat-lbl">High Risk</div>
+            <div class="stat-card resolved-card">
+                <div id="resolvedCount" class="stat-val" style="color:var(--success)">0</div>
+                <div class="stat-lbl">Auto-Verified</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-val" id="count-med" style="color: var(--warning);">0</div>
-                <div class="stat-lbl">Med Risk</div>
+        </div>
+
+        <div id="routeBanner" class="route-info-card">
+            <div>
+                <b id="routeTarget">Route to Target</b><br>
+                <span id="routeStats">Calculating ETA...</span>
             </div>
-            <div class="stat-card">
-                <div class="stat-val" id="count-resolved" style="color: var(--success);">0</div>
-                <div class="stat-lbl">Resolved</div>
-            </div>
+            <button onclick="clearCurrentRoute()" style="background:rgba(0,0,0,0.2); border:none; color:white; border-radius:4px; padding:4px 8px; cursor:pointer;">✕</button>
         </div>
 
         <div class="filter-tabs">
-            <button class="filter-tab active" onclick="setFilter('all', this)">All</button>
-            <button class="filter-tab" onclick="setFilter('high', this)">High</button>
-            <button class="filter-tab" onclick="setFilter('medium', this)">Medium</button>
-            <button class="filter-tab" onclick="setFilter('resolved', this)">Resolved</button>
+            <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+            <button class="filter-btn" onclick="setFilter('high', this)">High</button>
+            <button class="filter-btn" onclick="setFilter('medium', this)">Medium</button>
+            <button class="filter-btn" onclick="setFilter('resolved', this)">Resolved</button>
         </div>
 
-        <div class="defect-list-title">Work Orders & Clustered Hits</div>
-        <div class="defect-list" id="defectsList">
-            <!-- Dynamic defect cards -->
-        </div>
+        <div class="ticket-list" id="potholeList">Polling for live defects...</div>
 
-        <div class="actions-group">
-            <button class="btn-manifest" onclick="exportNativeXLSX()">📊 Export PWD Manifest (.xlsx)</button>
-            <a href="/report" class="btn-citizen">📢 Citizen Grievance Portal</a>
+        <div class="actions-bar">
+            <button class="btn-action" onclick="exportWorkOrders()">📊 Export PWD Manifest (.xlsx)</button>
+            <a href="/report" class="btn-action btn-citizen-action">📢 Citizen Grievance Portal</a>
+            <a href="/sensor" target="_blank" class="btn-action">📱 Sensor Node</a>
+        </div>
+    </div>
+    
+    <div id="map"></div>
+
+    <!-- Incident Playbook / SOP Modal -->
+    <div id="playbookModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 id="modalDefectTitle">Defect Incident Playbook #PWD-0001</h2>
+                    <span style="font-size: 0.75rem; color: #9ca3af;" id="modalDefectCoords">Coordinates: 12.82310, 80.04510 • SRM Kattankulathur Sector</span>
+                </div>
+                <button class="close-modal no-print" onclick="closePlaybook()">✕</button>
+            </div>
+
+            <!-- Print Header Banner -->
+            <div class="print-only" style="border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 14px; font-size: 0.8rem;">
+                <b>PUBLIC WORKS DEPARTMENT • ROAD INFRASTRUCTURE MONITORING & REPAIR MANIFEST</b>
+            </div>
+
+            <div class="sop-grid">
+                <div class="sop-card" style="border-left-color: #ef4444;">
+                    <div class="sop-label">Priority & Resolution SLA</div>
+                    <div class="sop-value" id="modalSLA">Immediate (Within 4 Hours)</div>
+                </div>
+                <div class="sop-card">
+                    <div class="sop-label">Sensor Consensus Confidence</div>
+                    <div class="sop-value" id="modalHits">8 Vehicles Verified</div>
+                </div>
+                <div class="sop-card" style="grid-column: span 2;">
+                    <div class="sop-label">Mandatory Material Requisition</div>
+                    <div class="sop-value" id="modalMaterials">Dense Bituminous Macadam (DBM) + Tack Coat + Plate Compactor</div>
+                </div>
+            </div>
+
+            <div class="checklist-box">
+                <div class="sop-label" style="margin-bottom: 8px; color: #38bdf8;">Standard Operating Procedure (SOP) Checklist</div>
+                <label class="checklist-item"><input type="checkbox" checked> <b>1. Safety Buffer:</b> Position reflective safety cones 30m prior to impact zone.</label>
+                <label class="checklist-item"><input type="checkbox" checked> <b>2. Debris Clearing:</b> High-pressure air purge to clear aggregate dust.</label>
+                <label class="checklist-item"><input type="checkbox"> <b>3. Application:</b> Apply bitumen emulsion tack coat to edge walls.</label>
+                <label class="checklist-item"><input type="checkbox"> <b>4. Compaction:</b> Level hot/cold asphalt mix with 3-pass mechanical compactor.</label>
+                <label class="checklist-item"><input type="checkbox"> <b>5. Auto-Verification:</b> Telemetry pass will close ticket in AIKYA portal.</label>
+            </div>
+
+            <!-- Printable Navigation QR and Signature Block -->
+            <div class="print-only" style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 24px; border-top: 1px dashed #94a3b8; padding-top: 16px;">
+                <div style="font-size: 0.78rem;">
+                    <b>Field Crew Navigation QR:</b><br>
+                    <img id="modalQrCode" src="" alt="Google Maps QR" style="width: 90px; height: 90px; border: 1px solid #ccc; margin-top: 4px;"/>
+                    <div style="font-size: 0.65rem; color: #64748b;">Scan to open driving route</div>
+                </div>
+                <div style="font-size: 0.78rem; text-align: right;">
+                    <div><b>Site Supervisor Signature:</b> ___________________________</div>
+                    <div style="margin-top: 8px;"><b>Execution Date & Time:</b> ___________________________</div>
+                </div>
+            </div>
+
+            <div class="no-print" style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+                <button class="btn-action" style="width: auto; padding: 8px 16px;" onclick="window.print()">🖨️ Print Dispatch Card</button>
+                <button class="btn-action" style="width: auto; padding: 8px 16px; background: #0284c7; color: white;" onclick="closePlaybook()">Close</button>
+            </div>
         </div>
     </div>
 
-    <!-- Playbook Modal -->
-    <div class="modal-overlay" id="playbookModal">
-        <div class="playbook-card">
-            <h2 id="modal-title">Incident Playbook // Defect #--</h2>
-            <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 14px;">Automated Remediation Estimation & Material Dispatch Specs</p>
-            
-            <div class="playbook-row">
-                <span>Remediation Strategy:</span>
-                <span id="modal-strategy">Surface Leveling</span>
-            </div>
-            <div class="playbook-row">
-                <span>Bill of Material:</span>
-                <span id="modal-material">Cold Mix Asphalt (0.5 Bag)</span>
-            </div>
-            <div class="playbook-row">
-                <span>Corridor Zone:</span>
-                <span>SRM Kattankulathur</span>
-            </div>
-            <div class="playbook-row">
-                <span>Priority SLA:</span>
-                <span id="modal-sla" style="color: #f87171;">Within 24 Hours</span>
-            </div>
-
-            <div style="display: flex; gap: 8px; margin-top: 18px;">
-                <button class="btn-citizen" style="flex: 1;" onclick="dispatchWorkOrder()">🚀 Dispatch Work Order</button>
-                <button class="btn-manifest" style="flex: 1;" onclick="closeModal()">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let allPotholes = [];
-        let currentFilter = 'all';
-        let markers = {};
-        let activeSelectedId = null;
+        const DEPOT_COORDS = [12.8231, 80.0415];
 
-        // OpenTopoMap (Exact Topographic Relief & Campus Contours Layer)
-        const topoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        const terrainLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
             maxZoom: 17,
-            attribution: '&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap'
+            attribution: '© OpenStreetMap, © OpenTopoMap'
         });
 
-        // Satellite Alternative Layer
-        const satelliteMap = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+        const satelliteHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
             maxZoom: 20,
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+            attribution: '© Google Satellite'
         });
 
-        const map = L.map('map', { 
-            zoomControl: false, 
-            layers: [topoMap] 
-        }).setView([12.8231, 80.0451], 16);
+        const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        });
 
-        L.control.zoom({ position: 'topleft' }).addTo(map);
+        const map = L.map('map', {
+            center: [12.8231, 80.0451],
+            zoom: 16,
+            layers: [terrainLayer]
+        });
 
         const baseMaps = {
-            "🗺️ Topo Terrain (Default)": topoMap,
-            "🛰️ Satellite": satelliteMap
+            "⛰️ Topographic / Terrain": terrainLayer,
+            "🛰️ Satellite (Hybrid with Places)": satelliteHybrid,
+            "🗺️ Standard Street": streetLayer
         };
+
         L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
-        function getMarkerColor(p) {
-            if (p.status === 'resolved') return '#10b981';
-            if (p.severity === 'high') return '#ef4444';
-            if (p.severity === 'medium') return '#f59e0b';
+        const depotIcon = L.divIcon({
+            html: `<div style="background:#0284c7; color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border:2px solid white; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.6);">🏢</div>`,
+            className: 'depot-pin',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+        L.marker(DEPOT_COORDS, { icon: depotIcon }).addTo(map).bindPopup("<b>PWD Central Fleet Depot</b><br>Dispatch HQ");
+
+        let markers = {};
+        let activeRouteLayer = null;
+        let currentFilter = 'all';
+        let latestPotholes = [];
+
+        function getSeverityColor(sev, status) {
+            if (status === 'resolved') return '#10b981';
+            if (sev === 'high') return '#ef4444';
+            if (sev === 'medium') return '#f59e0b';
             return '#38bdf8';
         }
 
-        async function fetchPotholes() {
-            try {
-                const res = await fetch('/api/potholes');
-                allPotholes = await res.json();
-                renderDashboard();
-            } catch (err) {
-                console.error("Error fetching defect data:", err);
+        function focusPothole(id, lat, lng) {
+            map.flyTo([lat, lng], 18, { animate: true, duration: 1.0 });
+            if (markers[id]) {
+                setTimeout(() => markers[id].openPopup(), 500);
             }
         }
 
-        function setFilter(filter, el) {
-            currentFilter = filter;
-            document.querySelectorAll('.filter-tab').forEach(btn => btn.classList.remove('active'));
-            el.classList.add('active');
-            renderDashboard();
-        }
-
-        function renderDashboard() {
-            let activeCount = 0, highCount = 0, medCount = 0, resolvedCount = 0;
-            const container = document.getElementById('defectsList');
-            container.innerHTML = '';
-
-            allPotholes.forEach(p => {
-                if (p.status === 'resolved') {
-                    resolvedCount++;
-                } else {
-                    activeCount++;
-                    if (p.severity === 'high') highCount++;
-                    if (p.severity === 'medium') medCount++;
-                }
-
-                const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving`;
-
-                if (!markers[p.id]) {
-                    const circle = L.circleMarker([p.lat, p.lng], {
-                        radius: p.severity === 'high' ? 8 : 6.5,
-                        fillColor: getMarkerColor(p),
-                        color: '#ffffff',
-                        weight: 1.5,
-                        opacity: 0.95,
-                        fillOpacity: 0.9
-                    }).addTo(map);
-
-                    circle.bindPopup(`
-                        <div>
-                            <div class="popup-title">Ticket #${p.id}</div>
-                            <div class="popup-row">Severity: <b style="color:${getMarkerColor(p)}; text-transform:uppercase;">${p.severity}</b></div>
-                            <div class="popup-row">Vehicle Hits: <b>${p.hit_count} vehicles</b></div>
-                            <div class="popup-row">Status: <b>${p.status.toUpperCase()}</b></div>
-                            <div class="popup-row">GPS: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</div>
-                            <div class="popup-btn-group">
-                                <a href="${navUrl}" target="_blank" class="popup-btn btn-route">📍 Way to Pothole</a>
-                                <button onclick="openPlaybook(${p.id})" class="popup-btn btn-playbook">📋 Playbook</button>
-                            </div>
-                        </div>
-                    `);
-                    markers[p.id] = circle;
-                }
-            });
-
-            // Update stats grid
-            document.getElementById('count-active').innerText = activeCount;
-            document.getElementById('count-high').innerText = highCount;
-            document.getElementById('count-med').innerText = medCount;
-            document.getElementById('count-resolved').innerText = resolvedCount;
-
-            const filtered = allPotholes.filter(p => {
-                if (currentFilter === 'all') return true;
-                if (currentFilter === 'resolved') return p.status === 'resolved';
-                return p.severity === currentFilter && p.status !== 'resolved';
-            });
-
-            if (filtered.length === 0) {
-                container.innerHTML = '<div style="text-align:center;color:#64748b;padding:20px;font-size:0.8rem;">No matching defects.</div>';
-                return;
-            }
-
-            filtered.forEach(p => {
-                const item = document.createElement('div');
-                item.className = 'defect-item';
-                
-                let badgeClass = 'badge-low';
-                let badgeText = 'LOW';
-                if (p.status === 'resolved') {
-                    badgeClass = 'badge-resolved';
-                    badgeText = 'RESOLVED';
-                } else if (p.severity === 'high') {
-                    badgeClass = 'badge-high';
-                    badgeText = 'HIGH';
-                } else if (p.severity === 'medium') {
-                    badgeClass = 'badge-medium';
-                    badgeText = 'MEDIUM';
-                }
-
-                item.innerHTML = `
-                    <div class="defect-item-head">
-                        <span style="color:#ffffff;">Defect #${p.id} (${p.severity.toUpperCase()})</span>
-                        <span class="defect-badge ${badgeClass}">${badgeText}</span>
-                    </div>
-                    <div class="defect-item-body">
-                        Hits Recorded: <b>${p.hit_count} vehicles</b><br>
-                        Coords: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}
-                    </div>
-                `;
-                item.onclick = () => {
-                    map.flyTo([p.lat, p.lng], 17, { animate: true, duration: 1 });
-                    markers[p.id].openPopup();
-                };
-                container.appendChild(item);
-            });
-        }
-
-        window.openPlaybook = function(id) {
-            const p = allPotholes.find(item => item.id === id);
+        function openPlaybook(id) {
+            const p = latestPotholes.find(item => item.id === id);
             if (!p) return;
-            activeSelectedId = id;
 
-            document.getElementById('modal-title').innerText = `Incident Playbook // Defect #${p.id}`;
-            document.getElementById('modal-strategy').innerText = p.status === 'resolved' ? 'No Action Required' : (p.severity === 'high' ? 'Deep Mill & Hot Fill' : (p.severity === 'medium' ? 'Edge Sealing & Patch' : 'Surface Leveling'));
-            document.getElementById('modal-material').innerText = p.status === 'resolved' ? 'None (Auto-Verified)' : (p.severity === 'high' ? 'Bituminous Concrete (2.5 Bags)' : (p.severity === 'medium' ? 'Dense Aggregate + Rapid Patch' : 'Cold Mix Asphalt (0.5 Bag)'));
-            document.getElementById('modal-sla').innerText = p.status === 'resolved' ? 'COMPLETED' : (p.severity === 'high' ? 'CRITICAL (Immediate)' : (p.severity === 'medium' ? 'MEDIUM (Scheduled)' : 'LOW (Monitoring)'));
-            document.getElementById('modal-sla').style.color = p.severity === 'high' ? '#ef4444' : '#38bdf8';
+            document.getElementById('modalDefectTitle').innerText = `Work Order Incident Playbook #PWD-${String(p.id).padStart(4, '0')}`;
+            document.getElementById('modalDefectCoords').innerText = `Coordinates: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} • SRM Kattankulathur Sector`;
+            document.getElementById('modalHits').innerText = `${p.hit_count} Cross-Vehicle Sensor Confirmations`;
+
+            const gmapsUrl = encodeURIComponent(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`);
+            document.getElementById('modalQrCode').src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${gmapsUrl}`;
+
+            if (p.severity === 'high') {
+                document.getElementById('modalSLA').innerText = "CRITICAL • 4-Hour Rapid Response";
+                document.getElementById('modalMaterials').innerText = "Bituminous Concrete (2.5 Bags) + Emulsion Tack Coat + Compactor";
+            } else if (p.severity === 'medium') {
+                document.getElementById('modalSLA').innerText = "MEDIUM • 24-Hour Scheduled Patch";
+                document.getElementById('modalMaterials').innerText = "Dense Graded Aggregate + Rapid Cold Patch (1.5 Bags)";
+            } else {
+                document.getElementById('modalSLA').innerText = "LOW • 48-Hour Regular Monitoring";
+                document.getElementById('modalMaterials').innerText = "Cold Mix Asphalt Surface Seal (0.5 Bag)";
+            }
 
             document.getElementById('playbookModal').style.display = 'flex';
-        };
+        }
 
-        function closeModal() {
+        function closePlaybook() {
             document.getElementById('playbookModal').style.display = 'none';
         }
 
-        function dispatchWorkOrder() {
-            alert(`✅ Work order for Defect #${activeSelectedId} dispatched!`);
-            closeModal();
+        function setFilter(filter, btn) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderPotholes();
         }
 
-        function exportNativeXLSX() {
-            if (allPotholes.length === 0) return alert("No defects to export.");
+        async function planRouteToPothole(id, destLat, destLng) {
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${DEPOT_COORDS[1]},${DEPOT_COORDS[0]};${destLng},${destLat}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
 
-            const data = [
-                [
-                    "Work Order ID",
-                    "Defect Priority",
-                    "Status",
-                    "Vehicle Hits",
-                    "Latitude",
-                    "Longitude",
-                    "Corridor Zone",
-                    "Recommended Action",
-                    "Bill of Material",
-                    "Logged Time",
-                    "Google Maps Link"
-                ]
-            ];
+                if (!data.routes || data.routes.length === 0) return alert("No navigable route found.");
 
-            allPotholes.forEach(p => {
-                const workId = `PWD-DEF-${String(p.id).padStart(4, '0')}`;
-                
+                const route = data.routes[0];
+                const distanceKm = (route.distance / 1000).toFixed(2);
+                const durationMin = Math.round(route.duration / 60);
+
+                if (activeRouteLayer) map.removeLayer(activeRouteLayer);
+
+                activeRouteLayer = L.geoJSON(route.geometry, {
+                    style: { color: '#0284c7', weight: 6, opacity: 0.85, dashArray: '1, 8', lineCap: 'round' }
+                }).addTo(map);
+
+                map.fitBounds(activeRouteLayer.getBounds(), { padding: [40, 40] });
+
+                document.getElementById('routeBanner').style.display = 'flex';
+                document.getElementById('routeTarget').innerText = `Repair Dispatch #${id}`;
+                document.getElementById('routeStats').innerText = `${distanceKm} km • ~${durationMin} mins drive`;
+            } catch (err) {
+                console.error("Routing error:", err);
+            }
+        }
+
+        function clearCurrentRoute() {
+            if (activeRouteLayer) {
+                map.removeLayer(activeRouteLayer);
+                activeRouteLayer = null;
+            }
+            document.getElementById('routeBanner').style.display = 'none';
+        }
+
+        function exportWorkOrders() {
+            if (!latestPotholes.length) return alert("No defect data to export.");
+
+            const excelData = latestPotholes.map(p => {
+                const dateObj = new Date(p.last_seen || Date.now());
+                const cleanDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')} ${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+
                 let priority = "LOW (Monitoring)";
                 let action = "Surface Leveling";
-                let bom = "Cold Mix Asphalt (0.5 Bag)";
+                let material = "Cold Mix Asphalt (0.5 Bag)";
 
-                if (p.status === "resolved") {
-                    priority = "COMPLETED";
-                    action = "No Action Required";
-                    bom = "None (Auto-Verified)";
-                } else if (p.severity === "high") {
+                if (p.severity === 'high') {
                     priority = "CRITICAL (Immediate)";
                     action = "Deep Mill & Hot Fill";
-                    bom = "Bituminous Concrete (2.5 Bags)";
-                } else if (p.severity === "medium") {
+                    material = "Bituminous Concrete (2.5 Bags)";
+                } else if (p.severity === 'medium') {
                     priority = "MEDIUM (Scheduled)";
                     action = "Edge Sealing & Patch";
-                    bom = "Dense Aggregate + Rapid Patch";
+                    material = "Dense Aggregate + Rapid Patch";
                 }
 
-                const gmapsLink = `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving`;
-                const loggedTime = p.first_seen || "2026-08-22 20:09";
+                if (p.status === 'resolved') {
+                    priority = "COMPLETED";
+                    action = "No Action Required";
+                    material = "None (Auto-Verified)";
+                }
 
-                data.push([
-                    workId,
-                    priority,
-                    p.status.toUpperCase(),
-                    `${p.hit_count} vehicles`,
-                    parseFloat(p.lat.toFixed(5)),
-                    parseFloat(p.lng.toFixed(5)),
-                    "SRM Kattankulathur",
-                    action,
-                    bom,
-                    loggedTime,
-                    gmapsLink
-                ]);
+                return {
+                    "Work Order ID": `PWD-DEF-${String(p.id).padStart(4, '0')}`,
+                    "Defect Priority": priority,
+                    "Status": p.status.toUpperCase(),
+                    "Vehicle Hits": `${p.hit_count} vehicles`,
+                    "Latitude": parseFloat(p.lat.toFixed(5)),
+                    "Longitude": parseFloat(p.lng.toFixed(5)),
+                    "Corridor Zone": "SRM Kattankulathur",
+                    "Recommended Action": action,
+                    "Bill of Material": material,
+                    "Logged Time": cleanDate,
+                    "Google Maps Link": `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving`
+                };
             });
 
-            const ws = XLSX.utils.aoa_to_sheet(data);
-
+            const ws = XLSX.utils.json_to_sheet(excelData);
             ws['!cols'] = [
-                { wch: 16 },
-                { wch: 22 },
-                { wch: 14 },
-                { wch: 14 },
-                { wch: 12 },
-                { wch: 12 },
-                { wch: 24 },
-                { wch: 26 },
-                { wch: 34 },
-                { wch: 20 },
-                { wch: 80 }
+                { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 14 },
+                { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 26 },
+                { wch: 34 }, { wch: 20 }, { wch: 80 }
             ];
 
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "PWD Work Orders");
-            XLSX.writeFile(wb, "AIKYA_PWD_Manifest_SRMIST.xlsx");
+            XLSX.utils.book_append_sheet(wb, ws, "PWD Manifest");
+            XLSX.writeFile(wb, `AIKYA_PWD_Manifest_SRMIST.xlsx`);
         }
 
-        fetchPotholes();
-        setInterval(fetchPotholes, 5000);
+        function renderPotholes() {
+            let activeCount = 0;
+            let resolvedCount = 0;
+            let listHtml = "";
+
+            latestPotholes.forEach(p => {
+                if (p.status === 'resolved') resolvedCount++;
+                else activeCount++;
+
+                const color = getSeverityColor(p.severity, p.status);
+                const gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${DEPOT_COORDS[0]},${DEPOT_COORDS[1]}&destination=${p.lat},${p.lng}&travelmode=driving`;
+
+                if (!markers[p.id]) {
+                    markers[p.id] = L.circleMarker([p.lat, p.lng], {
+                        radius: 8,
+                        fillColor: color,
+                        color: '#ffffff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.9
+                    }).addTo(map);
+                } else {
+                    markers[p.id].setStyle({ fillColor: color });
+                }
+
+                markers[p.id].bindPopup(`
+                    <div style="font-family: sans-serif; color: #0f172a; min-width: 180px;">
+                        <b>Defect #${p.id} (${p.severity.toUpperCase()})</b><br>
+                        Sensor Hits: <b>${p.hit_count}</b> vehicles<br>
+                        Status: <b>${p.status.toUpperCase()}</b><br>
+                        Coords: <code>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</code>
+                        <button class="btn-route btn-playbook" onclick="openPlaybook(${p.id})">📋 View Incident Playbook</button>
+                        <button class="btn-route" onclick="planRouteToPothole(${p.id}, ${p.lat}, ${p.lng})">🚚 Dispatch Repair Route</button>
+                        <a class="btn-route btn-gmaps" href="${gmapsUrl}" target="_blank">🗺️ Open in Google Maps</a>
+                    </div>
+                `);
+
+                let shouldShow = false;
+                if (currentFilter === 'all') shouldShow = true;
+                else if (currentFilter === 'resolved' && p.status === 'resolved') shouldShow = true;
+                else if (currentFilter === p.severity && p.status !== 'resolved') shouldShow = true;
+
+                if (shouldShow) {
+                    listHtml += `
+                        <div class="ticket ${p.status === 'resolved' ? 'resolved' : p.severity}" onclick="focusPothole(${p.id}, ${p.lat}, ${p.lng})">
+                            <span class="badge ${p.status === 'resolved' ? 'badge-resolved' : 'badge-verified'}">${p.status}</span>
+                            <b>Defect #${p.id} (${p.severity.toUpperCase()})</b>
+                            <div style="color: var(--text-main); margin-top: 4px;">Hits Recorded: <b>${p.hit_count} vehicles</b></div>
+                            <div style="color: var(--text-muted); font-size: 0.72rem; margin-top: 2px;">📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</div>
+                        </div>
+                    `;
+                }
+            });
+
+            document.getElementById('totalDefects').innerText = activeCount;
+            document.getElementById('resolvedCount').innerText = resolvedCount;
+            document.getElementById('potholeList').innerHTML = listHtml || "<div style='color:var(--text-muted); text-align:center; padding:20px;'>No matching defects.</div>";
+        }
+
+        async function fetchDashboardData() {
+            try {
+                const res = await fetch("/api/potholes");
+                latestPotholes = await res.json();
+                renderPotholes();
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+        }
+
+        setInterval(fetchDashboardData, 2000);
+        fetchDashboardData();
     </script>
 </body>
 </html>
