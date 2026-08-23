@@ -1,7 +1,11 @@
 import os
 import sys
 import datetime
+import random
 from typing import List, Optional
+
+# Ensure internal modules resolve
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,9 +14,14 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.models import SessionLocal, init_db, Hit, Pothole
-from backend.filters import butterworth_filter
-from backend.cluster import cluster_hits, check_smooth_pass_resolution
+try:
+    from models import SessionLocal, init_db, Hit, Pothole
+    from filters import butterworth_filter
+    from cluster import cluster_hits, check_smooth_pass_resolution
+except ImportError:
+    from backend.models import SessionLocal, init_db, Hit, Pothole
+    from backend.filters import butterworth_filter
+    from backend.cluster import cluster_hits, check_smooth_pass_resolution
 
 init_db()
 
@@ -32,6 +41,39 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# Automatic on-startup seeding
+@app.on_event("startup")
+def startup_seed_db():
+    db = SessionLocal()
+    if db.query(Pothole).count() == 0:
+        base_lat, base_lng = 12.8231, 80.0451
+        campus_defects = [
+            {"offset": (0.0008, 0.0012), "hits": 14, "severity": "high", "status": "verified"},
+            {"offset": (-0.0012, 0.0018), "hits": 8, "severity": "medium", "status": "verified"},
+            {"offset": (0.0019, -0.0009), "hits": 4, "severity": "low", "status": "verified"},
+            {"offset": (-0.0021, -0.0015), "hits": 18, "severity": "high", "status": "verified"},
+            {"offset": (0.0005, -0.0022), "hits": 6, "severity": "medium", "status": "verified"},
+            {"offset": (-0.0015, 0.0008), "hits": 11, "severity": "high", "status": "resolved"},
+            {"offset": (0.0024, 0.0021), "hits": 5, "severity": "low", "status": "resolved"},
+        ]
+        now = datetime.datetime.now(datetime.timezone.utc)
+        for p_data in campus_defects:
+            p_lat = base_lat + p_data["offset"][0]
+            p_lng = base_lng + p_data["offset"][1]
+            pothole = Pothole(
+                lat=p_lat,
+                lng=p_lng,
+                hit_count=p_data["hits"],
+                severity=p_data["severity"],
+                status=p_data["status"],
+                first_seen=now - datetime.timedelta(hours=random.randint(4, 72)),
+                last_seen=now,
+                smooth_pass_count=3 if p_data["status"] == "resolved" else 0
+            )
+            db.add(pothole)
+        db.commit()
+    db.close()
 
 class TelemetryPayload(BaseModel):
     device_id: str
@@ -118,7 +160,7 @@ def get_potholes(db: Session = Depends(get_db)):
         for p in records
     ]
 
-# Serve Static Web Frontend Pages
+# Static web hosting
 web_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web"))
 if os.path.exists(web_dir):
     app.mount("/static", StaticFiles(directory=web_dir), name="static")
