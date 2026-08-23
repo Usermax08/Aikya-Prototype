@@ -42,7 +42,7 @@
             z-index: 1;
         }
 
-        /* Floating Overlay Glass Card */
+        /* Floating Command Panel */
         .glass-panel {
             position: absolute;
             top: 20px;
@@ -93,7 +93,7 @@
             text-transform: uppercase;
         }
 
-        /* Top 2 Big Metric Stat Cards */
+        /* Summary Stat Cards */
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -139,7 +139,7 @@
             letter-spacing: 0.5px;
         }
 
-        /* Filter Tab Buttons */
+        /* Filter Tabs */
         .filter-tabs {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -167,7 +167,7 @@
             color: #ffffff;
         }
 
-        /* Defect Scrollable Card List */
+        /* Defect List */
         .defect-list {
             flex: 1;
             overflow-y: auto;
@@ -208,23 +208,34 @@
             margin-bottom: 4px;
         }
         
+        /* Risk Badges */
         .badge {
-            font-size: 0.65rem;
+            font-size: 0.62rem;
             padding: 2px 7px;
             border-radius: 4px;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        .badge-verified {
-            background: rgba(244, 63, 94, 0.15);
-            color: #fda4af;
-            border: 1px solid rgba(244, 63, 94, 0.35);
+        .badge-high {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+        .badge-medium {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fcd34d;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
+        .badge-low {
+            background: rgba(56, 189, 248, 0.2);
+            color: #7dd3fc;
+            border: 1px solid rgba(56, 189, 248, 0.4);
         }
         .badge-resolved {
-            background: rgba(16, 185, 129, 0.15);
+            background: rgba(16, 185, 129, 0.2);
             color: #6ee7b7;
-            border: 1px solid rgba(16, 185, 129, 0.35);
+            border: 1px solid rgba(16, 185, 129, 0.4);
         }
 
         .ticket-body {
@@ -241,7 +252,7 @@
             gap: 4px;
         }
 
-        /* 3 Bottom Action Buttons */
+        /* Action Buttons */
         .actions-group {
             display: flex;
             flex-direction: column;
@@ -279,7 +290,7 @@
             background: #0369a1;
         }
 
-        /* Leaflet Popup & Buttons */
+        /* Popup Customization */
         .leaflet-popup-content-wrapper {
             background: #0f172a;
             color: #f8fafc;
@@ -601,8 +612,21 @@
             filtered.forEach(p => {
                 const item = document.createElement('div');
                 item.className = `ticket ${p.status === 'resolved' ? 'resolved' : p.severity}`;
-                const badgeClass = p.status === 'resolved' ? 'badge-resolved' : 'badge-verified';
-                const badgeText = p.status === 'resolved' ? 'RESOLVED' : 'VERIFIED';
+                
+                // Show risk level badge instead of generic verified text
+                let badgeClass = 'badge-low';
+                let badgeText = 'LOW RISK';
+
+                if (p.status === 'resolved') {
+                    badgeClass = 'badge-resolved';
+                    badgeText = 'RESOLVED';
+                } else if (p.severity === 'high') {
+                    badgeClass = 'badge-high';
+                    badgeText = 'HIGH RISK';
+                } else if (p.severity === 'medium') {
+                    badgeClass = 'badge-medium';
+                    badgeText = 'MED RISK';
+                }
 
                 item.innerHTML = `
                     <div class="ticket-head">
