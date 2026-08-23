@@ -78,8 +78,7 @@ def startup_seed_db():
                 severity=p_data["severity"],
                 status=p_data["status"],
                 first_seen=now - datetime.timedelta(hours=random.randint(4, 96)),
-                last_seen=now,
-                smooth_pass_count=3 if p_data["status"] == "resolved" else 0
+                last_seen=now
             )
             db.add(pothole)
         db.commit()
@@ -140,8 +139,7 @@ def create_citizen_report(payload: CitizenReportPayload, db: Session = Depends(g
         severity=payload.severity.lower(),
         status="verified",
         first_seen=now,
-        last_seen=now,
-        smooth_pass_count=0
+        last_seen=now
     )
     db.add(new_pothole)
     db.commit()
@@ -170,7 +168,7 @@ def get_potholes(db: Session = Depends(get_db)):
         for p in records
     ]
 
-# Serve Static Web Frontend Pages
+# Static web hosting
 web_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web"))
 if os.path.exists(web_dir):
     app.mount("/static", StaticFiles(directory=web_dir), name="static")
