@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AIKYA PWD Portal - SRMIST NODE</title>
-    <!-- Leaflet CSS -->
+    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Heatmap Engine -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <!-- SheetJS for Native .xlsx Export -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
@@ -599,6 +601,8 @@
         let currentFilter = 'all';
         let markers = {};
         let activeRouteLayer = null;
+        let heatLayer = null;
+        let layerControl = null;
 
         const topoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
             maxZoom: 17,
@@ -621,7 +625,6 @@
             "🗺️ Topo Terrain (Default)": topoMap,
             "🛰️ Satellite": satelliteMap
         };
-        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
         const depotIcon = L.divIcon({
             html: `<div style="background:#0284c7; color:white; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; border:2px solid white; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.6);">🏢</div>`,
@@ -631,7 +634,6 @@
         });
         L.marker(DEPOT_COORDS, { icon: depotIcon }).addTo(map).bindPopup("<b>PWD Central Fleet Depot</b><br>Dispatch HQ");
 
-        // Desktop Retract / Expand Drawer Handler
         function toggleDesktopDrawer() {
             const panel = document.getElementById('mainDashboardPanel');
             const btn = document.getElementById('desktopToggleBtn');
@@ -639,7 +641,6 @@
             btn.innerHTML = panel.classList.contains('desktop-collapsed') ? '▶' : '◀';
         }
 
-        // Mobile Retract / Expand Drawer Handler
         function toggleMobileDrawer() {
             const panel = document.getElementById('mainDashboardPanel');
             const text = document.getElementById('drawerStatusText');
@@ -654,11 +655,43 @@
             return '#38bdf8';
         }
 
+        function updateHeatmap() {
+            if (!allPotholes || allPotholes.length === 0) return;
+
+            const heatPoints = allPotholes
+                .filter(p => p.status !== 'resolved')
+                .map(p => {
+                    const intensity = p.severity === 'high' ? 1.0 : (p.severity === 'medium' ? 0.65 : 0.35);
+                    return [p.lat, p.lng, intensity];
+                });
+
+            if (!heatLayer) {
+                heatLayer = L.heatLayer(heatPoints, {
+                    radius: 28,
+                    blur: 16,
+                    maxZoom: 17,
+                    gradient: { 0.3: '#38bdf8', 0.65: '#f59e0b', 1.0: '#ef4444' }
+                });
+
+                const overlays = {
+                    "🔥 Road Roughness (IRI) Heatmap": heatLayer
+                };
+
+                if (layerControl) {
+                    map.removeControl(layerControl);
+                }
+                layerControl = L.control.layers(baseMaps, overlays, { position: 'topright' }).addTo(map);
+            } else {
+                heatLayer.setLatLngs(heatPoints);
+            }
+        }
+
         async function fetchPotholes() {
             try {
                 const res = await fetch('/api/potholes');
                 allPotholes = await res.json();
                 renderDashboard();
+                updateHeatmap();
             } catch (err) {
                 console.error("Error fetching defect data:", err);
             }
@@ -757,7 +790,6 @@
                     map.flyTo([p.lat, p.lng], 17, { animate: true, duration: 1 });
                     markers[p.id].openPopup();
                     
-                    // Auto-collapse in mobile view upon selecting a ticket
                     if (window.innerWidth <= 768) {
                         const panel = document.getElementById('mainDashboardPanel');
                         panel.classList.add('mobile-collapsed');
