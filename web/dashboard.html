@@ -10,7 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
-            --bg-glass: rgba(15, 23, 42, 0.9);
+            --bg-glass: rgba(11, 19, 43, 0.95);
             --border-glass: rgba(56, 189, 248, 0.25);
             --accent-cyan: #38bdf8;
             --accent-blue: #0284c7;
@@ -129,6 +129,13 @@
             color: #ffffff;
         }
 
+        .defect-list-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+        }
+
         .defect-list {
             flex: 1;
             overflow-y: auto;
@@ -156,9 +163,20 @@
             font-weight: 800;
             margin-bottom: 4px;
         }
+        .defect-badge {
+            font-size: 0.62rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .badge-resolved { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+        .badge-verified { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; }
+
         .defect-item-body {
             font-size: 0.72rem;
             color: var(--text-muted);
+            line-height: 1.4;
         }
 
         .actions-group {
@@ -252,7 +270,6 @@
         .btn-route { background: #10b981; color: white; }
         .btn-playbook { background: #0284c7; color: white; }
 
-        /* Leaflet layer control dark theme */
         .leaflet-control-layers {
             background: #0f172a !important;
             color: #f8fafc !important;
@@ -291,6 +308,7 @@
             <button class="filter-tab" onclick="setFilter('resolved', this)">Resolved</button>
         </div>
 
+        <div class="defect-list-title">Work Orders & Clustered Hits</div>
         <div class="defect-list" id="defectsList">
             <!-- Dynamic defect cards -->
         </div>
@@ -338,36 +356,30 @@
         let markers = {};
         let activeSelectedId = null;
 
-        // Base Layer: Google Terrain with elevation contours & shaded relief (Standard Default)
-        const terrainMap = L.tileLayer('https://{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
-            maxZoom: 20,
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-            attribution: '&copy; Google Maps'
+        // OpenTopoMap (Exact Topographic Relief & Campus Contours Layer)
+        const topoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            maxZoom: 17,
+            attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
         });
 
+        // Satellite Alternative Layer
         const satelliteMap = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
             maxZoom: 20,
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
 
-        const streetMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; CARTO &copy; OpenStreetMap',
-            maxZoom: 19
-        });
-
-        // Initialize Map with Terrain as the Standard View
+        // Initialize Map with OpenTopoMap as the Default Base View
         const map = L.map('map', { 
             zoomControl: false, 
-            layers: [terrainMap] 
-        }).setView([12.8231, 80.0451], 15);
+            layers: [topoMap] 
+        }).setView([12.8231, 80.0451], 16);
 
-        L.control.zoom({ position: 'topright' }).addTo(map);
+        L.control.zoom({ position: 'topleft' }).addTo(map);
 
-        // Layer Switcher in top right corner
+        // Layer Switcher in Top Right
         const baseMaps = {
-            "⛰️ Terrain (Default)": terrainMap,
-            "🛰️ Satellite": satelliteMap,
-            "🗺️ Clean Streets": streetMap
+            "🗺️ Topo Terrain (Default)": topoMap,
+            "🛰️ Satellite": satelliteMap
         };
         L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
@@ -408,7 +420,7 @@
 
                 if (!markers[p.id]) {
                     const circle = L.circleMarker([p.lat, p.lng], {
-                        radius: p.severity === 'high' ? 9 : 7,
+                        radius: p.severity === 'high' ? 8 : 6.5,
                         fillColor: getMarkerColor(p),
                         color: '#ffffff',
                         weight: 1.5,
@@ -450,17 +462,21 @@
             filtered.forEach(p => {
                 const item = document.createElement('div');
                 item.className = 'defect-item';
+                const badgeClass = p.status === 'resolved' ? 'badge-resolved' : 'badge-verified';
+                const badgeText = p.status === 'resolved' ? 'RESOLVED' : 'VERIFIED';
+
                 item.innerHTML = `
                     <div class="defect-item-head">
-                        <span style="color:#38bdf8;">PWD-DEF-${String(p.id).padStart(4, '0')}</span>
-                        <span style="color:${getMarkerColor(p)};text-transform:uppercase;">${p.severity}</span>
+                        <span style="color:#ffffff;">Defect #${p.id} (${p.severity.toUpperCase()})</span>
+                        <span class="defect-badge ${badgeClass}">${badgeText}</span>
                     </div>
                     <div class="defect-item-body">
-                        GPS: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} &bull; ${p.hit_count} vehicles
+                        Hits Recorded: <b>${p.hit_count} vehicles</b><br>
+                        Coords: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}
                     </div>
                 `;
                 item.onclick = () => {
-                    map.flyTo([p.lat, p.lng], 18, { animate: true, duration: 1 });
+                    map.flyTo([p.lat, p.lng], 17, { animate: true, duration: 1 });
                     markers[p.id].openPopup();
                 };
                 container.appendChild(item);
@@ -472,7 +488,7 @@
             if (!p) return;
             activeSelectedId = id;
 
-            document.getElementById('modal-title').innerText = `Incident Playbook // PWD-DEF-${String(p.id).padStart(4, '0')}`;
+            document.getElementById('modal-title').innerText = `Incident Playbook // Defect #${p.id}`;
             document.getElementById('modal-strategy').innerText = p.status === 'resolved' ? 'No Action Required' : (p.severity === 'high' ? 'Deep Mill & Hot Fill' : (p.severity === 'medium' ? 'Edge Sealing & Patch' : 'Surface Leveling'));
             document.getElementById('modal-material').innerText = p.status === 'resolved' ? 'None (Auto-Verified)' : (p.severity === 'high' ? 'Bituminous Concrete (2.5 Bags)' : (p.severity === 'medium' ? 'Dense Aggregate + Rapid Patch' : 'Cold Mix Asphalt (0.5 Bag)'));
             document.getElementById('modal-sla').innerText = p.status === 'resolved' ? 'COMPLETED' : (p.severity === 'high' ? 'CRITICAL (Immediate)' : (p.severity === 'medium' ? 'MEDIUM (Scheduled)' : 'LOW (Monitoring)'));
@@ -486,7 +502,7 @@
         }
 
         function dispatchWorkOrder() {
-            alert(`✅ Work order for PWD-DEF-${String(activeSelectedId).padStart(4, '0')} dispatched!`);
+            alert(`✅ Work order for Defect #${activeSelectedId} dispatched!`);
             closeModal();
         }
 
