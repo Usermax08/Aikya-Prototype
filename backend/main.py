@@ -1,7 +1,6 @@
 import os
 import sys
 import datetime
-import random
 from typing import List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -24,7 +23,7 @@ except ImportError:
 
 init_db()
 
-app = FastAPI(title="AIKYA PWD Backend")
+app = FastAPI(title="AIKYA PWD Portal")
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,44 +40,42 @@ def get_db():
     finally:
         db.close()
 
-# Auto-seed the 16 defect cases on startup
+# Auto-seed the exact 16 defect cases
 @app.on_event("startup")
 def startup_seed_db():
     db = SessionLocal()
     if db.query(Pothole).count() == 0:
-        base_lat, base_lng = 12.8231, 80.0451
-        now = datetime.datetime.now(datetime.timezone.utc)
-
+        fixed_time = datetime.datetime(2026, 8, 22, 20, 9, tzinfo=datetime.timezone.utc)
+        
         all_defects = [
-            {"offset": (0.0008, 0.0012), "hits": 24, "severity": "high", "status": "verified"},
-            {"offset": (-0.0012, 0.0018), "hits": 12, "severity": "medium", "status": "verified"},
-            {"offset": (0.0019, -0.0009), "hits": 6, "severity": "low", "status": "verified"},
-            {"offset": (-0.0021, -0.0015), "hits": 31, "severity": "high", "status": "verified"},
-            {"offset": (0.0005, -0.0022), "hits": 9, "severity": "medium", "status": "verified"},
-            {"offset": (-0.0015, 0.0008), "hits": 19, "severity": "high", "status": "resolved"},
-            {"offset": (0.0024, 0.0021), "hits": 7, "severity": "low", "status": "resolved"},
-            {"offset": (-0.0003, 0.0027), "hits": 16, "severity": "high", "status": "verified"},
-            {"offset": (0.0015, 0.0005), "hits": 10, "severity": "medium", "status": "verified"},
-            {"offset": (-0.0028, 0.0019), "hits": 22, "severity": "high", "status": "verified"},
-            {"offset": (0.0031, -0.0024), "hits": 5, "severity": "low", "status": "verified"},
-            {"offset": (-0.0009, -0.0031), "hits": 14, "severity": "medium", "status": "verified"},
-            {"offset": (0.0020, 0.0035), "hits": 28, "severity": "high", "status": "verified"},
-            {"offset": (-0.0035, -0.0008), "hits": 15, "severity": "high", "status": "resolved"},
-            {"offset": (0.0002, 0.0019), "hits": 8, "severity": "medium", "status": "resolved"},
-            {"offset": (-0.0018, -0.0025), "hits": 4, "severity": "low", "status": "resolved"},
+            {"id": 1, "lat": 12.81780, "lng": 80.03970, "hits": 3, "severity": "low", "status": "verified"},
+            {"id": 2, "lat": 12.82857, "lng": 80.04636, "hits": 9, "severity": "high", "status": "verified"},
+            {"id": 3, "lat": 12.82604, "lng": 80.04505, "hits": 8, "severity": "medium", "status": "verified"},
+            {"id": 4, "lat": 12.81610, "lng": 80.03765, "hits": 12, "severity": "high", "status": "resolved"},
+            {"id": 5, "lat": 12.81670, "lng": 80.05756, "hits": 8, "severity": "high", "status": "verified"},
+            {"id": 6, "lat": 12.83347, "lng": 80.04039, "hits": 9, "severity": "low", "status": "resolved"},
+            {"id": 7, "lat": 12.82068, "lng": 80.04930, "hits": 13, "severity": "low", "status": "verified"},
+            {"id": 8, "lat": 12.80911, "lng": 80.04414, "hits": 13, "severity": "low", "status": "verified"},
+            {"id": 9, "lat": 12.82644, "lng": 80.04610, "hits": 7, "severity": "high", "status": "verified"},
+            {"id": 10, "lat": 12.82874, "lng": 80.04678, "hits": 10, "severity": "medium", "status": "verified"},
+            {"id": 11, "lat": 12.81957, "lng": 80.05842, "hits": 8, "severity": "medium", "status": "verified"},
+            {"id": 12, "lat": 12.81997, "lng": 80.05242, "hits": 8, "severity": "medium", "status": "verified"},
+            {"id": 13, "lat": 12.81265, "lng": 80.03511, "hits": 6, "severity": "low", "status": "resolved"},
+            {"id": 14, "lat": 12.81186, "lng": 80.04293, "hits": 3, "severity": "high", "status": "verified"},
+            {"id": 15, "lat": 12.82136, "lng": 80.03556, "hits": 12, "severity": "medium", "status": "resolved"},
+            {"id": 16, "lat": 12.81010, "lng": 80.05510, "hits": 7, "severity": "high", "status": "verified"},
         ]
 
         for p_data in all_defects:
-            p_lat = base_lat + p_data["offset"][0]
-            p_lng = base_lng + p_data["offset"][1]
             pothole = Pothole(
-                lat=p_lat,
-                lng=p_lng,
+                id=p_data["id"],
+                lat=p_data["lat"],
+                lng=p_data["lng"],
                 hit_count=p_data["hits"],
                 severity=p_data["severity"],
                 status=p_data["status"],
-                first_seen=now - datetime.timedelta(hours=random.randint(4, 96)),
-                last_seen=now
+                first_seen=fixed_time,
+                last_seen=fixed_time
             )
             db.add(pothole)
         db.commit()
@@ -162,13 +159,13 @@ def get_potholes(db: Session = Depends(get_db)):
             "hit_count": p.hit_count,
             "severity": p.severity,
             "status": p.status,
-            "first_seen": p.first_seen.isoformat() if p.first_seen else None,
-            "last_seen": p.last_seen.isoformat() if p.last_seen else None
+            "first_seen": p.first_seen.strftime("%Y-%m-%d %H:%M") if p.first_seen else "2026-08-22 20:09",
+            "last_seen": p.last_seen.strftime("%Y-%m-%d %H:%M") if p.last_seen else "2026-08-22 20:09"
         }
         for p in records
     ]
 
-# Static web hosting
+# Static Web Hosting
 web_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web"))
 if os.path.exists(web_dir):
     app.mount("/static", StaticFiles(directory=web_dir), name="static")
