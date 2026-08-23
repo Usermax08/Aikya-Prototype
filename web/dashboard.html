@@ -14,6 +14,9 @@
             --border-glass: rgba(56, 189, 248, 0.25);
             --accent-cyan: #38bdf8;
             --accent-blue: #0284c7;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
             --card-bg: #1e293b;
@@ -44,7 +47,7 @@
             position: absolute;
             top: 20px;
             left: 20px;
-            width: 380px;
+            width: 400px;
             max-height: calc(100vh - 40px);
             background: var(--bg-glass);
             backdrop-filter: blur(14px);
@@ -55,7 +58,7 @@
             z-index: 1000;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.75);
         }
 
         .header-title {
@@ -88,21 +91,22 @@
             text-transform: uppercase;
         }
 
+        /* 4-Stat Metric Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
             margin-bottom: 14px;
         }
         .stat-card {
             background: rgba(30, 41, 59, 0.65);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 10px;
+            padding: 8px 4px;
             border-radius: 8px;
             text-align: center;
         }
-        .stat-val { font-size: 1.5rem; font-weight: 800; color: #38bdf8; }
-        .stat-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+        .stat-val { font-size: 1.25rem; font-weight: 800; }
+        .stat-lbl { font-size: 0.58rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 2px; }
 
         .filter-tabs {
             display: grid;
@@ -163,6 +167,7 @@
             font-weight: 800;
             margin-bottom: 4px;
         }
+        
         .defect-badge {
             font-size: 0.62rem;
             padding: 2px 6px;
@@ -170,8 +175,10 @@
             font-weight: 800;
             text-transform: uppercase;
         }
+        .badge-high { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+        .badge-medium { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+        .badge-low { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; }
         .badge-resolved { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
-        .badge-verified { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; }
 
         .defect-item-body {
             font-size: 0.72rem;
@@ -290,14 +297,23 @@
             <span class="node-tag">SRMIST NODE</span>
         </div>
 
+        <!-- 4-Stat Metric Counter Grid -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-val" id="count-active">0</div>
-                <div class="stat-lbl">Active Potholes</div>
+                <div class="stat-val" id="count-active" style="color: var(--accent-cyan);">0</div>
+                <div class="stat-lbl">Active</div>
             </div>
             <div class="stat-card">
-                <div class="stat-val" id="count-verified">0</div>
-                <div class="stat-lbl">Auto-Verified</div>
+                <div class="stat-val" id="count-high" style="color: var(--danger);">0</div>
+                <div class="stat-lbl">High Risk</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" id="count-med" style="color: var(--warning);">0</div>
+                <div class="stat-lbl">Med Risk</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" id="count-resolved" style="color: var(--success);">0</div>
+                <div class="stat-lbl">Resolved</div>
             </div>
         </div>
 
@@ -322,7 +338,7 @@
     <!-- Playbook Modal -->
     <div class="modal-overlay" id="playbookModal">
         <div class="playbook-card">
-            <h2 id="modal-title">Incident Playbook // PWD-DEF-0001</h2>
+            <h2 id="modal-title">Incident Playbook // Defect #--</h2>
             <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 14px;">Automated Remediation Estimation & Material Dispatch Specs</p>
             
             <div class="playbook-row">
@@ -359,7 +375,7 @@
         // OpenTopoMap (Exact Topographic Relief & Campus Contours Layer)
         const topoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
             maxZoom: 17,
-            attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
+            attribution: '&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap'
         });
 
         // Satellite Alternative Layer
@@ -368,7 +384,6 @@
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
 
-        // Initialize Map with OpenTopoMap as the Default Base View
         const map = L.map('map', { 
             zoomControl: false, 
             layers: [topoMap] 
@@ -376,7 +391,6 @@
 
         L.control.zoom({ position: 'topleft' }).addTo(map);
 
-        // Layer Switcher in Top Right
         const baseMaps = {
             "🗺️ Topo Terrain (Default)": topoMap,
             "🛰️ Satellite": satelliteMap
@@ -408,13 +422,18 @@
         }
 
         function renderDashboard() {
-            let activeCount = 0, verifiedCount = 0;
+            let activeCount = 0, highCount = 0, medCount = 0, resolvedCount = 0;
             const container = document.getElementById('defectsList');
             container.innerHTML = '';
 
             allPotholes.forEach(p => {
-                if (p.status !== 'resolved') activeCount++;
-                if (p.status === 'verified') verifiedCount++;
+                if (p.status === 'resolved') {
+                    resolvedCount++;
+                } else {
+                    activeCount++;
+                    if (p.severity === 'high') highCount++;
+                    if (p.severity === 'medium') medCount++;
+                }
 
                 const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving`;
 
@@ -445,8 +464,11 @@
                 }
             });
 
+            // Update stats grid
             document.getElementById('count-active').innerText = activeCount;
-            document.getElementById('count-verified').innerText = verifiedCount;
+            document.getElementById('count-high').innerText = highCount;
+            document.getElementById('count-med').innerText = medCount;
+            document.getElementById('count-resolved').innerText = resolvedCount;
 
             const filtered = allPotholes.filter(p => {
                 if (currentFilter === 'all') return true;
@@ -462,8 +484,19 @@
             filtered.forEach(p => {
                 const item = document.createElement('div');
                 item.className = 'defect-item';
-                const badgeClass = p.status === 'resolved' ? 'badge-resolved' : 'badge-verified';
-                const badgeText = p.status === 'resolved' ? 'RESOLVED' : 'VERIFIED';
+                
+                let badgeClass = 'badge-low';
+                let badgeText = 'LOW';
+                if (p.status === 'resolved') {
+                    badgeClass = 'badge-resolved';
+                    badgeText = 'RESOLVED';
+                } else if (p.severity === 'high') {
+                    badgeClass = 'badge-high';
+                    badgeText = 'HIGH';
+                } else if (p.severity === 'medium') {
+                    badgeClass = 'badge-medium';
+                    badgeText = 'MEDIUM';
+                }
 
                 item.innerHTML = `
                     <div class="defect-item-head">
