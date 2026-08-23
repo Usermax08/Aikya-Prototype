@@ -368,6 +368,7 @@
         .btn-gmaps-pop { background: #059669; box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3); }
         .btn-gmaps-pop:hover { background: #047857; }
 
+        /* Incident Playbook Modal */
         #playbookModal {
             display: none;
             position: fixed;
@@ -401,17 +402,128 @@
         .checklist-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; margin-bottom: 8px; color: #e5e7eb; }
         .checklist-item input { accent-color: #0284c7; }
 
+        /* Floating AI Assistant Chatbot Styles */
+        #aikyaChatWidget {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1500;
+        }
+        #chatToggleBtn {
+            background: #0284c7;
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+            cursor: pointer;
+            font-size: 1.45rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease;
+        }
+        #chatToggleBtn:hover {
+            transform: scale(1.08);
+            background: #0369a1;
+        }
+        #chatWindow {
+            display: none;
+            position: absolute;
+            bottom: 65px;
+            right: 0;
+            width: 340px;
+            height: 440px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            box-shadow: 0 20px 45px rgba(0,0,0,0.85);
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            background: #1e293b;
+            padding: 12px 14px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-header-title {
+            color: #38bdf8;
+            font-weight: 800;
+            font-size: 0.88rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        #chatMessages {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 0.78rem;
+            color: #f8fafc;
+            background: #090d16;
+        }
+        #chatMessages::-webkit-scrollbar { width: 4px; }
+        #chatMessages::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        
+        .chat-msg {
+            padding: 8px 11px;
+            border-radius: 8px;
+            max-width: 86%;
+            line-height: 1.45;
+            word-wrap: break-word;
+        }
+        .chat-msg.bot {
+            background: #1e293b;
+            border: 1px solid #334155;
+            align-self: flex-start;
+            color: #f1f5f9;
+        }
+        .chat-msg.user {
+            background: #0284c7;
+            align-self: flex-end;
+            color: #ffffff;
+        }
+
+        #chatForm {
+            display: flex;
+            border-top: 1px solid #334155;
+            background: #0f172a;
+        }
+        #chatInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 11px 12px;
+            color: #fff;
+            font-size: 0.8rem;
+            outline: none;
+        }
+        #chatForm button {
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 0 14px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.8rem;
+            transition: background 0.15s ease;
+        }
+        #chatForm button:hover {
+            background: #0369a1;
+        }
+
         @media (max-width: 768px) {
-            .desktop-toggle-btn {
-                display: none !important;
-            }
+            .desktop-toggle-btn { display: none !important; }
             .glass-panel {
-                top: auto;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                width: 100%;
-                max-height: 75vh;
+                top: auto; left: 0; right: 0; bottom: 0;
+                width: 100%; max-height: 75vh;
                 border-radius: 18px 18px 0 0;
                 padding: 12px 16px 20px 16px;
                 transform: translateY(0);
@@ -421,50 +533,30 @@
                 transform: translateY(calc(100% - 62px));
             }
             .drawer-handle-bar {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 4px;
-                padding-bottom: 8px;
+                display: flex; flex-direction: column; align-items: center; gap: 4px; padding-bottom: 8px;
             }
-            .drawer-status-text {
-                font-size: 0.68rem;
-                font-weight: 700;
-                color: var(--accent-cyan);
-            }
-            .leaflet-top.leaflet-right {
-                top: 10px;
-                right: 10px;
-            }
+            .drawer-status-text { font-size: 0.68rem; font-weight: 700; color: var(--accent-cyan); }
+            .leaflet-top.leaflet-right { top: 10px; right: 10px; }
+            #aikyaChatWidget { bottom: 70px; right: 15px; }
+            #chatWindow { width: 300px; height: 380px; }
         }
 
         @media print {
             body * { visibility: hidden !important; }
             #playbookModal, #playbookModal * { visibility: visible !important; }
             #playbookModal {
-                position: absolute !important;
-                left: 0 !important; top: 0 !important;
-                width: 100% !important; height: auto !important;
-                background: white !important;
-                color: black !important;
-                padding: 0 !important;
-                display: block !important;
+                position: absolute !important; left: 0 !important; top: 0 !important;
+                width: 100% !important; height: auto !important; background: white !important;
+                color: black !important; padding: 0 !important; display: block !important;
             }
             .modal-content {
-                background: white !important;
-                color: black !important;
-                border: 2px solid #000 !important;
-                box-shadow: none !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                padding: 24px !important;
+                background: white !important; color: black !important; border: 2px solid #000 !important;
+                box-shadow: none !important; width: 100% !important; max-width: 100% !important; padding: 24px !important;
             }
             .close-modal, .no-print { display: none !important; }
             .modal-header h2 { color: #000 !important; font-size: 1.4rem !important; }
             .sop-card, .checklist-box {
-                background: #f8fafc !important;
-                color: #000 !important;
-                border: 1px solid #cbd5e1 !important;
+                background: #f8fafc !important; color: #000 !important; border: 1px solid #cbd5e1 !important;
                 border-left: 4px solid #0284c7 !important;
             }
             .sop-label { color: #475569 !important; }
@@ -579,6 +671,33 @@
                 <button class="btn-action-panel" style="width:auto; padding:8px 16px;" onclick="window.print()">🖨️ Print Dispatch Card</button>
                 <button class="btn-action-panel btn-cyan" style="width:auto; padding:8px 18px;" onclick="closePlaybook()">Close</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Floating AI Municipal Assistant Chatbot -->
+    <div id="aikyaChatWidget">
+        <button id="chatToggleBtn" onclick="toggleChatWindow()" title="AIKYA AI Assistant">
+            🤖
+        </button>
+
+        <div id="chatWindow">
+            <div class="chat-header">
+                <div class="chat-header-title">
+                    <span>🤖 AIKYA Municipal AI</span>
+                </div>
+                <button onclick="toggleChatWindow()" style="background: none; border: none; color: #94a3b8; font-size: 1.1rem; cursor: pointer;">✕</button>
+            </div>
+
+            <div id="chatMessages">
+                <div class="chat-msg bot">
+                    👋 <b>Hello Officer!</b> Ask me about active potholes, material requisitions, or our speed-bump filtering logic.
+                </div>
+            </div>
+
+            <form id="chatForm" onsubmit="sendChatMessage(event)">
+                <input type="text" id="chatInput" placeholder="Ask AIKYA Assistant..." autocomplete="off">
+                <button type="submit">Send</button>
+            </form>
         </div>
     </div>
 
@@ -889,6 +1008,49 @@
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "PWD Manifest");
             XLSX.writeFile(wb, `AIKYA_PWD_Manifest_SRMIST.xlsx`);
+        }
+
+        // Floating AI Chatbot Handlers
+        function toggleChatWindow() {
+            const win = document.getElementById('chatWindow');
+            win.style.display = win.style.display === 'flex' ? 'none' : 'flex';
+            if (win.style.display === 'flex') {
+                document.getElementById('chatInput').focus();
+            }
+        }
+
+        async function sendChatMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            const container = document.getElementById('chatMessages');
+            
+            // Add User Message bubble
+            container.innerHTML += `<div class="chat-msg user">${msg}</div>`;
+            input.value = '';
+            container.scrollTop = container.scrollHeight;
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ message: msg })
+                });
+                const data = await res.json();
+                
+                // Format Markdown bolding and linebreaks for display
+                let formatted = data.reply
+                    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                    .replace(/\n/g, '<br>');
+
+                container.innerHTML += `<div class="chat-msg bot">${formatted}</div>`;
+                container.scrollTop = container.scrollHeight;
+            } catch(err) {
+                container.innerHTML += `<div class="chat-msg bot" style="background:#ef4444; color:white;">⚠️ Failed to connect to AI Assistant.</div>`;
+                container.scrollTop = container.scrollHeight;
+            }
         }
 
         fetchPotholes();

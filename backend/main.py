@@ -1,37 +1,36 @@
 import os
-import sys
-import datetime
+import math
+from datetime import datetime
 from typing import List, Optional
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from fastapi import FastAPI, Depends, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+import uvicorn
 
-try:
-    from models import SessionLocal, init_db, Hit, Pothole
-    from filters import butterworth_filter
-    from cluster import cluster_hits, check_smooth_pass_resolution
-except ImportError:
-    from backend.models import SessionLocal, init_db, Hit, Pothole
-    from backend.filters import butterworth_filter
-    from backend.cluster import cluster_hits, check_smooth_pass_resolution
+# ----------------- DATABASE SETUP -----------------
+DATABASE_URL = "sqlite:///./potholes.db"
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
-init_db()
+class Pothole(Base):
+    __tablename__ = "potholes"
 
-app = FastAPI(title="AIKYA PWD Portal")
+    id = Column(Integer, primary_key=True, index=True)
+    lat = Column(Float, nullable=False)
+    lng = Column(Float, nullable=False)
+    severity = Column(String, default="low")       # low, medium, high
+    hit_count = Column(Integer, default=1)
+    status = Column(String, default="active")       # active, resolved
+    last_seen = Column(DateTime, default=datetime.utcnow)
+    image_url = Column(String, nullable=True)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+Base.metadata.create_all(bind=engine)
 
 def get_db():
     db = SessionLocal()
@@ -40,47 +39,32 @@ def get_db():
     finally:
         db.close()
 
-# Auto-seed the exact 16 defect cases
-@app.on_event("startup")
-def startup_seed_db():
+# Pre-seed initial sample data if DB is empty
+def seed_initial_data():
     db = SessionLocal()
     if db.query(Pothole).count() == 0:
-        fixed_time = datetime.datetime(2026, 8, 22, 20, 9, tzinfo=datetime.timezone.utc)
-        
-        all_defects = [
-            {"id": 1, "lat": 12.81780, "lng": 80.03970, "hits": 3, "severity": "low", "status": "verified"},
-            {"id": 2, "lat": 12.82857, "lng": 80.04636, "hits": 9, "severity": "high", "status": "verified"},
-            {"id": 3, "lat": 12.82604, "lng": 80.04505, "hits": 8, "severity": "medium", "status": "verified"},
-            {"id": 4, "lat": 12.81610, "lng": 80.03765, "hits": 12, "severity": "high", "status": "resolved"},
-            {"id": 5, "lat": 12.81670, "lng": 80.05756, "hits": 8, "severity": "high", "status": "verified"},
-            {"id": 6, "lat": 12.83347, "lng": 80.04039, "hits": 9, "severity": "low", "status": "resolved"},
-            {"id": 7, "lat": 12.82068, "lng": 80.04930, "hits": 13, "severity": "low", "status": "verified"},
-            {"id": 8, "lat": 12.80911, "lng": 80.04414, "hits": 13, "severity": "low", "status": "verified"},
-            {"id": 9, "lat": 12.82644, "lng": 80.04610, "hits": 7, "severity": "high", "status": "verified"},
-            {"id": 10, "lat": 12.82874, "lng": 80.04678, "hits": 10, "severity": "medium", "status": "verified"},
-            {"id": 11, "lat": 12.81957, "lng": 80.05842, "hits": 8, "severity": "medium", "status": "verified"},
-            {"id": 12, "lat": 12.81997, "lng": 80.05242, "hits": 8, "severity": "medium", "status": "verified"},
-            {"id": 13, "lat": 12.81265, "lng": 80.03511, "hits": 6, "severity": "low", "status": "resolved"},
-            {"id": 14, "lat": 12.81186, "lng": 80.04293, "hits": 3, "severity": "high", "status": "verified"},
-            {"id": 15, "lat": 12.82136, "lng": 80.03556, "hits": 12, "severity": "medium", "status": "resolved"},
-            {"id": 16, "lat": 12.81010, "lng": 80.05510, "hits": 7, "severity": "high", "status": "verified"},
+        samples = [
+            Pothole(lat=12.8231, lng=80.0451, severity="high", hit_count=9, status="active"),
+            Pothole(lat=12.8245, lng=80.0428, severity="medium", hit_count=5, status="active"),
+            Pothole(lat=12.8210, lng=80.0475, severity="low", hit_count=2, status="active"),
+            Pothole(lat=12.8260, lng=80.0402, severity="high", hit_count=12, status="active"),
+            Pothole(lat=12.8195, lng=80.0440, severity="low", hit_count=1, status="resolved"),
         ]
-
-        for p_data in all_defects:
-            pothole = Pothole(
-                id=p_data["id"],
-                lat=p_data["lat"],
-                lng=p_data["lng"],
-                hit_count=p_data["hits"],
-                severity=p_data["severity"],
-                status=p_data["status"],
-                first_seen=fixed_time,
-                last_seen=fixed_time
-            )
-            db.add(pothole)
+        db.add_all(samples)
         db.commit()
     db.close()
 
+seed_initial_data()
+
+# ----------------- FASTAPI APP -----------------
+app = FastAPI(title="AIKYA Pothole Tracking System")
+
+# Serve static directory for uploads and web assets
+os.makedirs("web", exist_ok=True)
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# ----------------- PYDANTIC SCHEMAS -----------------
 class TelemetryPayload(BaseModel):
     device_id: str
     lat: float
@@ -88,96 +72,154 @@ class TelemetryPayload(BaseModel):
     speed_kmh: float
     z_raw: List[float]
 
-class CitizenReportPayload(BaseModel):
+class PotholeResponse(BaseModel):
+    id: int
     lat: float
     lng: float
-    severity: str = "medium"
-    description: Optional[str] = "Citizen reported defect"
-    photo_base64: Optional[str] = None
+    severity: str
+    hit_count: int
+    status: str
+    last_seen: Optional[datetime]
+    image_url: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+class ChatQuery(BaseModel):
+    message: str
+
+# ----------------- HAVERSINE DISTANCE HELPER -----------------
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371000  # radius of Earth in meters
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+# ----------------- API ROUTES -----------------
+@app.get("/", response_class=HTMLResponse)
+async def serve_dashboard():
+    with open("web/dashboard.html", "r", encoding="utf-8") as f:
+        return f.read()
+
+@app.get("/sensor", response_class=HTMLResponse)
+async def serve_sensor():
+    with open("web/sensor.html", "r", encoding="utf-8") as f:
+        return f.read()
+
+@app.get("/report", response_class=HTMLResponse)
+async def serve_report():
+    report_file = "web/report.html"
+    if os.path.exists(report_file):
+        with open(report_file, "r", encoding="utf-8") as f:
+            return f.read()
+    return HTMLResponse("<h3>Grievance Portal file not found.</h3>", status_code=404)
+
+@app.get("/api/potholes", response_model=List[PotholeResponse])
+async def get_all_potholes(db: Session = Depends(get_db)):
+    return db.query(Pothole).all()
 
 @app.post("/api/telemetry")
-async def receive_telemetry(payload: TelemetryPayload, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    cutoff_freq = 5.0
-    sampling_rate = 50.0
-    filtered_accel = butterworth_filter(payload.z_raw, cutoff_freq, sampling_rate)
-    
-    max_vertical_spike = max(map(abs, filtered_accel)) if len(filtered_accel) > 0 else 0.0
-    is_impact = max_vertical_spike > 12.0
-    
-    hit = Hit(
-        device_id=payload.device_id,
-        lat=payload.lat,
-        lng=payload.lng,
-        z_accel=round(float(max_vertical_spike), 2),
-        speed_kmh=round(float(payload.speed_kmh), 1),
-        is_spike=is_impact
-    )
-    db.add(hit)
-    db.commit()
+async def process_telemetry(payload: TelemetryPayload, db: Session = Depends(get_db)):
+    max_z = max(payload.z_raw) if payload.z_raw else 0.0
+    is_spike = max_z > 11.8
 
-    if is_impact:
-        background_tasks.add_task(cluster_hits, db)
-    else:
-        background_tasks.add_task(check_smooth_pass_resolution, db, payload.lat, payload.lng)
+    if is_spike:
+        # Spatial Clustering (5-meter radius consensus)
+        nearby = None
+        for p in db.query(Pothole).filter(Pothole.status != "resolved").all():
+            if haversine_distance(p.lat, p.lng, payload.lat, payload.lng) <= 5.0:
+                nearby = p
+                break
 
-    return {
-        "status": "processed",
-        "is_spike": is_impact,
-        "max_z_accel": round(float(max_vertical_spike), 2)
-    }
+        if nearby:
+            nearby.hit_count += 1
+            nearby.last_seen = datetime.utcnow()
+            if nearby.hit_count >= 8:
+                nearby.severity = "high"
+            elif nearby.hit_count >= 4:
+                nearby.severity = "medium"
+            db.commit()
+        else:
+            new_p = Pothole(
+                lat=payload.lat,
+                lng=payload.lng,
+                severity="low",
+                hit_count=1,
+                status="active"
+            )
+            db.add(new_p)
+            db.commit()
+
+    return {"status": "ok", "is_spike": is_spike, "max_z": round(max_z, 2)}
 
 @app.post("/api/report")
-def create_citizen_report(payload: CitizenReportPayload, db: Session = Depends(get_db)):
-    now = datetime.datetime.now(datetime.timezone.utc)
-    new_pothole = Pothole(
-        lat=payload.lat,
-        lng=payload.lng,
-        hit_count=1,
-        severity=payload.severity.lower(),
-        status="verified",
-        first_seen=now,
-        last_seen=now
+async def submit_citizen_report(
+    lat: float = Form(...),
+    lng: float = Form(...),
+    severity: str = Form("medium"),
+    photo: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    image_path = None
+    if photo:
+        filename = f"report_{int(datetime.utcnow().timestamp())}_{photo.filename}"
+        save_dest = os.path.join("uploads", filename)
+        with open(save_dest, "wb") as buffer:
+            buffer.write(await photo.read())
+        image_path = f"/uploads/{filename}"
+
+    new_report = Pothole(
+        lat=lat,
+        lng=lng,
+        severity=severity,
+        hit_count=3,
+        status="active",
+        image_url=image_path
     )
-    db.add(new_pothole)
+    db.add(new_report)
     db.commit()
-    db.refresh(new_pothole)
-    return {
-        "status": "success",
-        "id": new_pothole.id,
-        "has_photo": bool(payload.photo_base64),
-        "message": f"Defect logged as Ticket #{new_pothole.id}."
-    }
+    return {"status": "success", "message": "Grievance logged successfully"}
 
-@app.get("/api/potholes")
-def get_potholes(db: Session = Depends(get_db)):
-    records = db.query(Pothole).all()
-    return [
-        {
-            "id": p.id,
-            "lat": p.lat,
-            "lng": p.lng,
-            "hit_count": p.hit_count,
-            "severity": p.severity,
-            "status": p.status,
-            "first_seen": p.first_seen.strftime("%Y-%m-%d %H:%M") if p.first_seen else "2026-08-22 20:09",
-            "last_seen": p.last_seen.strftime("%Y-%m-%d %H:%M") if p.last_seen else "2026-08-22 20:09"
-        }
-        for p in records
-    ]
+# ----------------- REAL-TIME AI MUNICIPAL ASSISTANT -----------------
+@app.post("/api/chat")
+async def aikya_assistant(query: ChatQuery, db: Session = Depends(get_db)):
+    msg = query.message.lower()
 
-# Static Web Hosting
-web_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web"))
-if os.path.exists(web_dir):
-    app.mount("/static", StaticFiles(directory=web_dir), name="static")
+    potholes = db.query(Pothole).all()
+    total_active = len([p for p in potholes if p.status != "resolved"])
+    total_high = len([p for p in potholes if p.severity == "high" and p.status != "resolved"])
+    total_medium = len([p for p in potholes if p.severity == "medium" and p.status != "resolved"])
+    total_resolved = len([p for p in potholes if p.status == "resolved"])
 
-    @app.get("/")
-    def serve_dashboard():
-        return FileResponse(os.path.join(web_dir, "dashboard.html"))
+    if any(w in msg for w in ["how many", "count", "active", "total", "status"]):
+        reply = f"Currently, there are **{total_active} active defects** logged in the sector:\n• **{total_high} Critical/High Risk**\n• **{total_medium} Medium Priority**\n• **{total_resolved} Auto-Verified & Resolved**."
+    
+    elif any(w in msg for w in ["material", "budget", "asphalt", "cost", "bags", "requisition"]):
+        est_bags = (total_high * 2.5) + (total_medium * 1.5) + ((total_active - total_high - total_medium) * 0.5)
+        labor_hours = total_active * 2
+        est_budget = int(est_bags * 1200 + labor_hours * 350)
+        reply = f"Estimated Sector Requisition:\n• **{est_bags:.1f} Bags of Bituminous Asphalt Mix**\n• Emulsion Tack Coat + Plate Compactor\n• Estimated Labor: **{labor_hours} Crew Hours**\n• Estimated Repair Budget: **₹{est_budget:,}**."
 
-    @app.get("/sensor")
-    def serve_sensor():
-        return FileResponse(os.path.join(web_dir, "sensor.html"))
+    elif any(w in msg for w in ["speed bump", "speed breaker", "algorithm", "filter", "-z", "+z"]):
+        reply = "AIKYA uses a **Dual-Phase Directional Filter**:\n• **Pothole Craters:** Produce an initial sharp negative free-fall drop (**-Z**) followed by impact shock $\\rightarrow$ Logged as Hazard.\n• **Speed Breakers:** Produce an initial upward displacement (**+Z**) $\\rightarrow$ Recognized as a bump and filtered out from risk scoring."
 
-    @app.get("/report")
-    def serve_report():
-        return FileResponse(os.path.join(web_dir, "report.html"))
+    elif any(w in msg for w in ["export", "excel", "manifest", "xlsx", "download"]):
+        reply = "You can download the official PWD Work Order Manifest at any time by clicking the **'📊 Export PWD Manifest (.xlsx)'** button on the bottom left panel."
+
+    elif any(w in msg for w in ["srm", "kattankulathur", "location", "sector", "zone"]):
+        reply = "The current monitoring node is locked on the **SRM Kattankulathur Sector (GST Road - Potheri Corridor)** with 50Hz continuous vehicle vibration telemetry streaming."
+
+    elif any(w in msg for w in ["hello", "hi", "hey", "help", "who are you"]):
+        reply = f"Hello Officer! I am **AIKYA Municipal AI Assistant**. I can help you with live defect counts ({total_active} active), asphalt material requisitions, road roughness (IRI) stats, or our telemetry filtering rules. What would you like to inspect?"
+
+    else:
+        reply = f"Officer, across the SRMIST sector we are tracking **{total_active} active defects** ({total_high} High Risk). You can ask me about **material budgets**, **speed bump filtering**, or **exporting work manifests**."
+
+    return {"reply": reply}
+
+# ----------------- APP LAUNCH -----------------
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
