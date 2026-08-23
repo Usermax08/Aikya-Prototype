@@ -1,17 +1,27 @@
+import os
+import sys
 import datetime
 import random
-from sqlalchemy.orm import Session
-from backend.models import SessionLocal, init_db, Pothole, Hit
+
+# Ensure root and backend directories are in Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+try:
+    from models import SessionLocal, init_db, Pothole, Hit
+except ImportError:
+    from backend.models import SessionLocal, init_db, Pothole, Hit
 
 def seed_demo_data():
     init_db()
-    db: Session = SessionLocal()
+    db = SessionLocal()
 
+    # Clear existing entries
     db.query(Hit).delete()
     db.query(Pothole).delete()
     db.commit()
 
-    # SRMIST Kattankulathur Campus Base
+    # SRMIST Kattankulathur Campus coordinates
     base_lat, base_lng = 12.8231, 80.0451
 
     campus_defects = [
@@ -44,7 +54,7 @@ def seed_demo_data():
 
     db.commit()
     db.close()
-    print("SRMIST Defect clusters successfully seeded!")
+    print("AIKYA SRMIST Defect clusters successfully seeded!")
 
 if __name__ == "__main__":
     seed_demo_data()
