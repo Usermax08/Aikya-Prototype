@@ -10,8 +10,8 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
-            --bg-glass: rgba(15, 23, 42, 0.88);
-            --border-glass: rgba(56, 189, 248, 0.2);
+            --bg-glass: rgba(15, 23, 42, 0.9);
+            --border-glass: rgba(56, 189, 248, 0.25);
             --accent-cyan: #38bdf8;
             --accent-blue: #0284c7;
             --text-main: #f8fafc;
@@ -251,6 +251,16 @@
         }
         .btn-route { background: #10b981; color: white; }
         .btn-playbook { background: #0284c7; color: white; }
+
+        /* Leaflet layer control dark theme */
+        .leaflet-control-layers {
+            background: #0f172a !important;
+            color: #f8fafc !important;
+            border: 1px solid #334155 !important;
+            border-radius: 8px !important;
+            padding: 6px 10px !important;
+            font-size: 0.75rem !important;
+        }
     </style>
 </head>
 <body>
@@ -328,13 +338,31 @@
         let markers = {};
         let activeSelectedId = null;
 
-        const map = L.map('map', { zoomControl: false }).setView([12.8231, 80.0451], 15);
-        L.control.zoom({ position: 'topright' }).addTo(map);
+        // Tile Layers: Original Clean Street Map + Satellite
+        const streetMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; CARTO &copy; OpenStreetMap',
+            maxZoom: 19
+        });
 
-        L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+        const satelliteMap = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
             maxZoom: 20,
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-        }).addTo(map);
+        });
+
+        // Initialize Map with Original Street Map View
+        const map = L.map('map', { 
+            zoomControl: false, 
+            layers: [streetMap] 
+        }).setView([12.8231, 80.0451], 15);
+
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        // Map layer switcher
+        const baseMaps = {
+            "🗺️ Street Map": streetMap,
+            "🛰️ Satellite": satelliteMap
+        };
+        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
         function getMarkerColor(p) {
             if (p.status === 'resolved') return '#10b981';
@@ -455,7 +483,6 @@
             closeModal();
         }
 
-        // Native .XLSX generator with explicit column sizing & unclipped date strings
         function exportNativeXLSX() {
             if (allPotholes.length === 0) return alert("No defects to export.");
 
@@ -516,19 +543,18 @@
 
             const ws = XLSX.utils.aoa_to_sheet(data);
 
-            // Set generous column widths so no text/date is ever clipped as '#######'
             ws['!cols'] = [
-                { wch: 16 }, // Work Order ID
-                { wch: 22 }, // Defect Priority
-                { wch: 14 }, // Status
-                { wch: 14 }, // Vehicle Hits
-                { wch: 12 }, // Latitude
-                { wch: 12 }, // Longitude
-                { wch: 24 }, // Corridor Zone
-                { wch: 26 }, // Recommended Action
-                { wch: 34 }, // Bill of Material
-                { wch: 20 }, // Logged Time
-                { wch: 80 }  // Google Maps Link
+                { wch: 16 },
+                { wch: 22 },
+                { wch: 14 },
+                { wch: 14 },
+                { wch: 12 },
+                { wch: 12 },
+                { wch: 24 },
+                { wch: 26 },
+                { wch: 34 },
+                { wch: 20 },
+                { wch: 80 }
             ];
 
             const wb = XLSX.utils.book_new();
