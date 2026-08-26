@@ -28,6 +28,7 @@
             flex-direction: column;
             min-height: 100vh;
             user-select: none;
+            transition: background-color 0.2s ease;
         }
 
         header {
@@ -109,6 +110,7 @@
         .chart-header {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             font-size: 0.72rem;
             color: var(--text-muted);
             margin-bottom: 8px;
@@ -171,7 +173,7 @@
     <div class="telemetry-grid">
         <div class="metric-card">
             <div class="metric-val" id="valZ" style="color: var(--accent-cyan);">0.00</div>
-            <div class="metric-lbl">Vertical Accel (m/s²)</div>
+            <div class="metric-lbl">Dynamic Shock (m/s²)</div>
         </div>
         <div class="metric-card">
             <div class="metric-val" id="valSpikes" style="color: var(--danger);">0</div>
@@ -189,8 +191,8 @@
 
     <div class="chart-box">
         <div class="chart-header">
-            <span>Real-Time Z-Axis Oscillogram</span>
-            <span style="color: var(--danger);">Spike Trigger: 11.8 m/s²</span>
+            <span>Real-Time Dynamic Waveform</span>
+            <span style="color: var(--danger);">Spike Trigger: 13.5 m/s²</span>
         </div>
         <canvas id="waveformCanvas"></canvas>
     </div>
@@ -208,6 +210,14 @@
         let spikeCount = 0;
         let geoWatchId = null;
         let recentZ = [];
+        
+        let lastLoggedTime = 0;
+        const HIT_COOLDOWN_MS = 2500; // 2.5s debounce to stop spamming
+        const SHOCK_TRIGGER_THRESHOLD = 13.5; // Dynamic acceleration threshold in m/s^2
+
+        // Dynamic 3-Axis Gravity Tracker
+        let gx = 0, gy = 0, gz = 9.81;
+        const alpha = 0.85;
 
         const canvas = document.getElementById('waveformCanvas');
         const ctx = canvas.getContext('2d');
@@ -238,8 +248,8 @@
             ctx.stroke();
 
             // Render Dynamic Waveform
-            ctx.strokeStyle = newVal > 11.8 ? "#ef4444" : "#38bdf8";
-            ctx.lineWidth = newVal > 11.8 ? 2.5 : 1.8;
+            ctx.strokeStyle = newVal >= SHOCK_TRIGGER_THRESHOLD ? "#ef4444" : "#38bdf8";
+            ctx.lineWidth = newVal >= SHOCK_TRIGGER_THRESHOLD ? 2.5 : 1.8;
             ctx.beginPath();
             const step = w / (waveHistory.length - 1);
 
@@ -274,7 +284,7 @@
                     return;
                 }
 
-                window.addEventListener('devicemotion', handleMotion);
+                window.addEventListener('devicemotion', handleMotion, true);
                 startGPS();
 
                 isRunning = true;
@@ -283,7 +293,7 @@
                 document.getElementById('statusDot').classList.add('active');
                 document.getElementById('statusText').innerText = "Streaming at 50Hz (Active)";
             } else {
-                window.removeEventListener('devicemotion', handleMotion);
+                window.removeEventListener('devicemotion', handleMotion, true);
                 if (geoWatchId) navigator.geolocation.clearWatch(geoWatchId);
 
                 isRunning = false;
@@ -297,41 +307,66 @@
         }
 
         function handleMotion(event) {
-            const acc = event.accelerationIncludingGravity || event.acceleration;
-            if (!acc || acc.z === null) return;
+            let acc = event.acceleration;
+            let accG = event.accelerationIncludingGravity;
+            let dynamicShock = 0;
+            let signedZ = 0;
 
-            const signedZ = acc.z - 9.81; // Gravity removal
-            const zMag = Math.abs(signedZ);
-            document.getElementById('valZ').innerText = zMag.toFixed(2);
-            drawWaveform(zMag);
+            // Step 1: Compute dynamic acceleration vector regardless of phone angle / OS
+            if (acc && acc.x !== null && acc.y !== null && acc.z !== null && (Math.abs(acc.x) + Math.abs(acc.y) + Math.abs(acc.z) > 0.02)) {
+                // Hardware supports pure dynamic acceleration
+                dynamicShock = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+                signedZ = acc.z;
+            } else if (accG && accG.x !== null && accG.y !== null && accG.z !== null) {
+                // iOS Safari fallback: Remove orientation gravity vector
+                let rx = accG.x || 0;
+                let ry = accG.y || 0;
+                let rz = accG.z || 0;
+
+                gx = alpha * gx + (1 - alpha) * rx;
+                gy = alpha * gy + (1 - alpha) * ry;
+                gz = alpha * gz + (1 - alpha) * rz;
+
+                let dx = rx - gx;
+                let dy = ry - gy;
+                let dz = rz - gz;
+
+                dynamicShock = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                signedZ = dz;
+            }
+
+            document.getElementById('valZ').innerText = dynamicShock.toFixed(2);
+            drawWaveform(dynamicShock);
 
             // Sliding window analysis for Speed-bump vs Pothole
             recentZ.push(signedZ);
-            if (recentZ.length > 6) recentZ.shift();
+            if (recentZ.length > 8) recentZ.shift();
 
             const tagEl = document.getElementById('classifierTag');
-            if (zMag > 11.8) {
-                const hasNegativeDip = recentZ.some(val => val < -2.2);
+            const now = Date.now();
+
+            if (dynamicShock >= SHOCK_TRIGGER_THRESHOLD) {
+                const hasNegativeDip = recentZ.some(val => val < -2.0);
+
                 if (hasNegativeDip) {
-                    // Pothole Crater Impact
                     tagEl.className = "classifier-tag tag-pothole";
                     tagEl.innerText = "CRATER IMPACT (LOGGED)";
                     if (navigator.vibrate) navigator.vibrate(100);
                 } else {
-                    // Speed Bump Smooth Rise
                     tagEl.className = "classifier-tag tag-speedbump";
                     tagEl.innerText = "SPEED BUMP (FILTERED)";
+                }
+
+                // Trigger backend upload only once per cooldown period
+                if (now - lastLoggedTime > HIT_COOLDOWN_MS) {
+                    lastLoggedTime = now;
+                    zRawBuffer.push(dynamicShock);
+                    sendTelemetryPayload([...zRawBuffer]);
+                    zRawBuffer = [];
                 }
             } else {
                 tagEl.className = "classifier-tag tag-normal";
                 tagEl.innerText = "NORMAL ROAD";
-            }
-
-            zRawBuffer.push(zMag);
-
-            if (zRawBuffer.length >= 25) {
-                sendTelemetryPayload([...zRawBuffer]);
-                zRawBuffer = [];
             }
         }
 
@@ -345,7 +380,7 @@
                     document.getElementById('valSpeed').innerText = currentSpeed.toFixed(1);
                     document.getElementById('valGPS').innerText = `${gpsLat.toFixed(4)}, ${gpsLng.toFixed(4)}`;
                 }, (err) => {
-                    // Smart Fallback for Indoor Testing
+                    // Indoor Fallback
                     gpsLat = 12.8231 + (Math.random() - 0.5) * 0.001;
                     gpsLng = 80.0451 + (Math.random() - 0.5) * 0.001;
                     document.getElementById('valGPS').innerText = `${gpsLat.toFixed(4)}, ${gpsLng.toFixed(4)} (Sim)`;
@@ -363,7 +398,7 @@
                         lat: gpsLat,
                         lng: gpsLng,
                         speed_kmh: currentSpeed,
-                        z_raw: buffer
+                        z_raw: buffer.length > 0 ? buffer : [SHOCK_TRIGGER_THRESHOLD]
                     })
                 });
                 const data = await res.json();
