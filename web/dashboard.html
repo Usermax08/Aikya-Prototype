@@ -970,7 +970,7 @@
                             <div class="popup-row">Coords: <code>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</code></div>
                             <button class="btn-popup btn-playbook-pop" onclick="requestAdminAction(() => openPlaybook(${p.id}))">📋 View Incident Playbook</button>
                             <button class="btn-popup btn-dispatch-pop" onclick="requestAdminAction(() => planRouteToPothole(${p.id}, ${p.lat}, ${p.lng}))">🚚 Dispatch Repair Route</button>
-                            <a class="btn-popup btn-gmaps-pop" href="${gmapsUrl}" target="_blank">🗺️ Open in Google Maps</a>
+                            <button class="btn-popup btn-gmaps-pop" onclick="requestAdminAction(() => window.open('${gmapsUrl}', '_blank'))">🗺️ Open in Google Maps</button>
                         </div>
                     `);
                     markers[p.id] = circle;
