@@ -1,77 +1,75 @@
 import os
+import sqlite3
 import math
-from datetime import datetime
 from typing import List, Optional
+from datetime import datetime
 
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-import uvicorn
 
-# ----------------- DATABASE SETUP -----------------
-DATABASE_URL = "sqlite:///./potholes.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+# --- APP SETUP ---
+app = FastAPI(title="AIKYA PWD Portal & Telemetry Engine")
 
-class Pothole(Base):
-    __tablename__ = "potholes"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    id = Column(Integer, primary_key=True, index=True)
-    lat = Column(Float, nullable=False)
-    lng = Column(Float, nullable=False)
-    severity = Column(String, default="low")       # low, medium, high
-    hit_count = Column(Integer, default=1)
-    status = Column(String, default="active")       # active, resolved
-    last_seen = Column(DateTime, default=datetime.utcnow)
-    image_url = Column(String, nullable=True)
+# Detect paths relative to this backend file
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+WEB_DIR = os.path.join(PROJECT_ROOT, "web")
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
-Base.metadata.create_all(bind=engine)
+# Point to your primary SQLite DB
+DB_PATH = os.path.join(BASE_DIR, "potholes.db")
+if not os.path.exists(DB_PATH):
+    # Fallback if aikya.db is used
+    alt_db = os.path.join(BASE_DIR, "aikya.db")
+    if os.path.exists(alt_db):
+        DB_PATH = alt_db
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+ADMIN_SECRET_KEY = "aikya_admin_2026"
 
-# Pre-seed Hyper-Local SRMIST Kattankulathur & Potheri GST Sector Points
-def seed_initial_data():
-    db = SessionLocal()
-    # Reset table so fresh SRM campus points populate cleanly
-    db.query(Pothole).delete()
-    
-    samples = [
-        # --- SRMIST Kattankulathur Campus & GST Arteries ---
-        Pothole(lat=12.8231, lng=80.0451, severity="high", hit_count=14, status="active"),   # Tech Park Main Junction
-        Pothole(lat=12.8245, lng=80.0428, severity="medium", hit_count=6, status="active"),  # SRM Main Arch Gate Exit
-        Pothole(lat=12.8210, lng=80.0475, severity="low", hit_count=2, status="active"),     # University Building / Library Avenue
-        Pothole(lat=12.8260, lng=80.0402, severity="high", hit_count=18, status="active"),   # GST Road - Potheri Signal Turn
-        Pothole(lat=12.8195, lng=80.0440, severity="low", hit_count=1, status="resolved"),   # Dental College / Hospital Lane (Auto-Verified)
-        Pothole(lat=12.8252, lng=80.0463, severity="medium", hit_count=7, status="active"),  # Java Green / Hostel Backroad
-        Pothole(lat=12.8220, lng=80.0398, severity="high", hit_count=11, status="active"),   # Potheri Railway Station Underpass
-        Pothole(lat=12.8275, lng=80.0435, severity="low", hit_count=3, status="active"),     # Abode Valley / Estancia Bypass
-        Pothole(lat=12.8182, lng=80.0410, severity="high", hit_count=9, status="resolved"),  # Kattankulathur Lakeview Stretch (Auto-Verified)
-    ]
-    db.add_all(samples)
-    db.commit()
-    db.close()
+# --- DATABASE INITIALIZATION ---
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS potholes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lat REAL NOT NULL,
+            lng REAL NOT NULL,
+            severity TEXT DEFAULT 'medium',
+            hit_count INTEGER DEFAULT 1,
+            status TEXT DEFAULT 'active',
+            last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lat REAL NOT NULL,
+            lng REAL NOT NULL,
+            description TEXT,
+            photo_path TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-seed_initial_data()
+init_db()
 
-# ----------------- FASTAPI APP -----------------
-app = FastAPI(title="AIKYA Pothole Tracking System - SRMIST Node")
-
-# Ensure static directories exist
-os.makedirs("web", exist_ok=True)
-os.makedirs("uploads", exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-
-# ----------------- PYDANTIC SCHEMAS -----------------
+# --- PYDANTIC SCHEMAS ---
 class TelemetryPayload(BaseModel):
     device_id: str
     lat: float
@@ -79,154 +77,187 @@ class TelemetryPayload(BaseModel):
     speed_kmh: float
     z_raw: List[float]
 
-class PotholeResponse(BaseModel):
-    id: int
-    lat: float
-    lng: float
-    severity: str
-    hit_count: int
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class StatusUpdateRequest(BaseModel):
+    pothole_id: int
     status: str
-    last_seen: Optional[datetime]
-    image_url: Optional[str]
 
-    class Config:
-        from_attributes = True
-
-class ChatQuery(BaseModel):
+class ChatMessage(BaseModel):
     message: str
 
-# ----------------- HAVERSINE DISTANCE HELPER -----------------
-def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    R = 6371000  # radius of Earth in meters
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+# --- HELPER FUNCTIONS ---
+def haversine_meters(lat1, lon1, lat2, lon2):
+    R = 6371000  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = math.sin(delta_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
 
-# ----------------- API ROUTES -----------------
-@app.get("/", response_class=HTMLResponse)
-async def serve_dashboard():
-    with open("web/dashboard.html", "r", encoding="utf-8") as f:
-        return f.read()
+# --- CORE API ROUTES ---
 
-@app.get("/sensor", response_class=HTMLResponse)
-async def serve_sensor():
-    with open("web/sensor.html", "r", encoding="utf-8") as f:
-        return f.read()
+@app.get("/api/potholes")
+def get_potholes():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, lat, lng, severity, hit_count, status, last_seen FROM potholes")
+    rows = cursor.fetchall()
+    conn.close()
 
-@app.get("/report", response_class=HTMLResponse)
-async def serve_report():
-    report_file = "web/report.html"
-    if os.path.exists(report_file):
-        with open(report_file, "r", encoding="utf-8") as f:
-            return f.read()
-    return HTMLResponse("<h3>Grievance Portal file not found.</h3>", status_code=404)
-
-@app.get("/api/potholes", response_model=List[PotholeResponse])
-async def get_all_potholes(db: Session = Depends(get_db)):
-    return db.query(Pothole).all()
+    potholes = []
+    for r in rows:
+        potholes.append({
+            "id": r[0],
+            "lat": r[1],
+            "lng": r[2],
+            "severity": r[3],
+            "hit_count": r[4],
+            "status": r[5],
+            "last_seen": r[6]
+        })
+    return potholes
 
 @app.post("/api/telemetry")
-async def process_telemetry(payload: TelemetryPayload, db: Session = Depends(get_db)):
-    max_z = max(payload.z_raw) if payload.z_raw else 0.0
-    is_spike = max_z > 11.8
+def process_telemetry(data: TelemetryPayload):
+    # Shock threshold check (dynamic spike >= 11.8 m/s²)
+    max_z = max(data.z_raw) if data.z_raw else 0.0
+    is_spike = max_z >= 11.8
 
-    if is_spike:
-        # Spatial Clustering (5-meter radius consensus)
-        nearby = None
-        for p in db.query(Pothole).filter(Pothole.status != "resolved").all():
-            if haversine_distance(p.lat, p.lng, payload.lat, payload.lng) <= 5.0:
-                nearby = p
-                break
+    if not is_spike:
+        return {"status": "ignored", "is_spike": False}
 
-        if nearby:
-            nearby.hit_count += 1
-            nearby.last_seen = datetime.utcnow()
-            if nearby.hit_count >= 8:
-                nearby.severity = "high"
-            elif nearby.hit_count >= 4:
-                nearby.severity = "medium"
-            db.commit()
-        else:
-            new_p = Pothole(
-                lat=payload.lat,
-                lng=payload.lng,
-                severity="low",
-                hit_count=1,
-                status="active"
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Spatial clustering (5m radius)
+    cursor.execute("SELECT id, lat, lng, hit_count FROM potholes WHERE status != 'resolved'")
+    active_potholes = cursor.fetchall()
+
+    matched_id = None
+    for p_id, p_lat, p_lng, hits in active_potholes:
+        dist = haversine_meters(data.lat, data.lng, p_lat, p_lng)
+        if dist <= 5.0:
+            matched_id = p_id
+            new_hits = hits + 1
+            new_severity = "high" if new_hits >= 8 else ("medium" if new_hits >= 4 else "low")
+            cursor.execute(
+                "UPDATE potholes SET hit_count = ?, severity = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?",
+                (new_hits, new_severity, matched_id)
             )
-            db.add(new_p)
-            db.commit()
+            break
 
-    return {"status": "ok", "is_spike": is_spike, "max_z": round(max_z, 2)}
+    if not matched_id:
+        cursor.execute(
+            "INSERT INTO potholes (lat, lng, severity, hit_count, status) VALUES (?, ?, ?, ?, ?)",
+            (data.lat, data.lng, "low", 1, "active")
+        )
+        matched_id = cursor.lastrowid
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "logged", "is_spike": True, "pothole_id": matched_id}
 
 @app.post("/api/report")
-async def submit_citizen_report(
+async def citizen_report(
     lat: float = Form(...),
     lng: float = Form(...),
-    severity: str = Form("medium"),
-    photo: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db)
+    description: Optional[str] = Form("Citizen logged pothole"),
+    photo: Optional[UploadFile] = File(None)
 ):
-    image_path = None
+    saved_filename = None
     if photo:
-        filename = f"report_{int(datetime.utcnow().timestamp())}_{photo.filename}"
-        save_dest = os.path.join("uploads", filename)
-        with open(save_dest, "wb") as buffer:
-            buffer.write(await photo.read())
-        image_path = f"/uploads/{filename}"
+        saved_filename = f"{int(datetime.utcnow().timestamp())}_{photo.filename}"
+        file_path = os.path.join(UPLOADS_DIR, saved_filename)
+        with open(file_path, "wb") as f:
+            f.write(await photo.read())
 
-    new_report = Pothole(
-        lat=lat,
-        lng=lng,
-        severity=severity,
-        hit_count=3,
-        status="active",
-        image_url=image_path
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO reports (lat, lng, description, photo_path) VALUES (?, ?, ?, ?)",
+        (lat, lng, description, saved_filename)
     )
-    db.add(new_report)
-    db.commit()
-    return {"status": "success", "message": "Grievance logged successfully"}
+    # Also create/update pothole ticket
+    cursor.execute(
+        "INSERT INTO potholes (lat, lng, severity, hit_count, status) VALUES (?, ?, ?, ?, ?)",
+        (lat, lng, "medium", 3, "active")
+    )
+    conn.commit()
+    conn.close()
 
-# ----------------- REAL-TIME AI MUNICIPAL ASSISTANT -----------------
+    return {"success": True, "message": "Grievance recorded successfully."}
+
+# --- SECURE ADMIN & RBAC ROUTES ---
+
+@app.post("/api/admin/login")
+def admin_login(req: AdminLoginRequest):
+    if req.username == "admin" and req.password == "pwd@aikya2026":
+        return {"success": True, "token": ADMIN_SECRET_KEY}
+    raise HTTPException(status_code=401, detail="Invalid admin credentials.")
+
+@app.patch("/api/potholes/status")
+def update_pothole_status(req: StatusUpdateRequest, authorization: Optional[str] = Header(None)):
+    if authorization != f"Bearer {ADMIN_SECRET_KEY}":
+        raise HTTPException(status_code=403, detail="Unauthorized: Admin access required.")
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE potholes SET status = ? WHERE id = ?", (req.status, req.pothole_id))
+    conn.commit()
+    conn.close()
+
+    return {"success": True, "pothole_id": req.pothole_id, "new_status": req.status}
+
+# --- AI MUNICIPAL ASSISTANT ROUTE ---
+
 @app.post("/api/chat")
-async def aikya_assistant(query: ChatQuery, db: Session = Depends(get_db)):
-    msg = query.message.lower()
-
-    potholes = db.query(Pothole).all()
-    total_active = len([p for p in potholes if p.status != "resolved"])
-    total_high = len([p for p in potholes if p.severity == "high" and p.status != "resolved"])
-    total_medium = len([p for p in potholes if p.severity == "medium" and p.status != "resolved"])
-    total_resolved = len([p for p in potholes if p.status == "resolved"])
-
-    if any(w in msg for w in ["how many", "count", "active", "total", "status"]):
-        reply = f"Across the **SRM Kattankulathur Sector**, there are **{total_active} active defects** logged in the network:\n• **{total_high} Critical/High Risk** (e.g., Tech Park Junction, Potheri Underpass)\n• **{total_medium} Medium Priority**\n• **{total_resolved} Auto-Verified & Resolved**."
+async def municipal_ai_chat(req: ChatMessage):
+    msg = req.message.lower()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
     
-    elif any(w in msg for w in ["material", "budget", "asphalt", "cost", "bags", "requisition"]):
-        est_bags = (total_high * 2.5) + (total_medium * 1.5) + ((total_active - total_high - total_medium) * 0.5)
-        labor_hours = total_active * 2
-        est_budget = int(est_bags * 1200 + labor_hours * 350)
-        reply = f"SRM Sector Material Requisition:\n• **{est_bags:.1f} Bags of Bituminous Asphalt Mix**\n• Emulsion Tack Coat + Mechanical Plate Compactor\n• Estimated Municipal Labor: **{labor_hours} Crew Hours**\n• Estimated Repair Budget: **₹{est_budget:,}**."
+    cursor.execute("SELECT COUNT(*) FROM potholes WHERE status = 'active'")
+    active_count = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM potholes WHERE status = 'resolved'")
+    resolved_count = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM potholes WHERE severity = 'high' AND status = 'active'")
+    high_count = cursor.fetchone()[0]
+    conn.close()
 
-    elif any(w in msg for w in ["speed bump", "speed breaker", "algorithm", "filter", "-z", "+z"]):
-        reply = "AIKYA uses a **Dual-Phase Directional Filter**:\n• **Pothole Craters:** Produce an initial sharp negative free-fall drop (**-Z**) followed by impact shock $\\rightarrow$ Logged as Hazard.\n• **Speed Breakers:** Produce an initial upward displacement (**+Z**) $\\rightarrow$ Recognized as a speed hump and filtered out from municipal risk scoring."
-
-    elif any(w in msg for w in ["export", "excel", "manifest", "xlsx", "download"]):
-        reply = "You can download the official PWD Work Order Manifest at any time by clicking the **'📊 Export PWD Manifest (.xlsx)'** button on the bottom left panel."
-
-    elif any(w in msg for w in ["srm", "kattankulathur", "potheri", "location", "sector", "zone"]):
-        reply = "The AIKYA edge node is monitoring the **SRMIST Kattankulathur Campus & Potheri GST Road Corridor** with 50Hz continuous vehicle vibration telemetry streaming."
-
-    elif any(w in msg for w in ["hello", "hi", "hey", "help", "who are you"]):
-        reply = f"Hello Officer! I am **AIKYA Municipal AI Assistant**. I can help you with live defect counts in SRMIST ({total_active} active), asphalt material requisitions, road roughness (IRI) stats, or our telemetry filtering rules. What would you like to inspect?"
-
+    if "active" in msg or "count" in msg or "how many" in msg:
+        reply = f"Currently, there are **{active_count} active potholes** detected across the sector ({high_count} classified as High Risk). **{resolved_count}** have been auto-verified as resolved."
+    elif "material" in msg or "asphalt" in msg or "budget" in msg:
+        est_bags = (high_count * 2.5) + ((active_count - high_count) * 1.0)
+        reply = f"Based on current active hazards, estimated asphalt requisition is **{est_bags:.1f} bags** of bituminous cold mix with **{active_count}L** of emulsion tack coat."
+    elif "speed" in msg or "bump" in msg or "filter" in msg:
+        reply = "AIKYA uses dual-phase directional analysis: Speed bumps produce an initial **upward acceleration (+Z)**, which our 50Hz band-pass filter isolates and drops. Potholes produce a sudden **free-fall drop (-Z)** followed by a kinetic shock."
     else:
-        reply = f"Officer, across the SRMIST sector we are tracking **{total_active} active defects** ({total_high} High Risk). You can ask me about **SRM hotspots**, **material budgets**, **speed bump filtering**, or **exporting work manifests**."
+        reply = f"AIKYA Monitoring Node is online. Managing {active_count} active road defects. How can I assist with work orders or field manifests today?"
 
     return {"reply": reply}
 
-# ----------------- APP LAUNCH -----------------
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+# --- FRONTEND HTML ROUTES ---
+
+@app.get("/", response_class=HTMLResponse)
+def get_dashboard():
+    return FileResponse(os.path.join(WEB_DIR, "dashboard.html"))
+
+@app.get("/sensor", response_class=HTMLResponse)
+def get_sensor_node():
+    return FileResponse(os.path.join(WEB_DIR, "sensor.html"))
+
+@app.get("/report", response_class=HTMLResponse)
+def get_report_portal():
+    return FileResponse(os.path.join(WEB_DIR, "report.html"))
+
+@app.get("/admin", response_class=HTMLResponse)
+def get_admin_page():
+    return FileResponse(os.path.join(WEB_DIR, "admin.html"))
