@@ -35,7 +35,7 @@
             overflow: hidden;
         }
 
-        /* --- CINEMATIC REVERSE-FADE SPLASH SCREEN --- */
+        /* --- CINEMATIC DARK-BLUE TO GLOWING WHITE/LIGHT-BLUE SPLASH SCREEN --- */
         #aikya-loader {
             position: fixed;
             inset: 0;
@@ -60,30 +60,80 @@
             font-size: 3.2rem;
             font-weight: 900;
             letter-spacing: 4px;
-            color: #ffffff;
+            color: #034694;
             opacity: 0;
             filter: blur(14px);
+            -webkit-filter: blur(14px);
             transform: scale(0.85);
-            animation: reverseFadeIn 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            text-shadow: 0 0 25px rgba(56, 189, 248, 0.65);
+            -webkit-transform: scale(0.85);
+            will-change: transform, opacity, filter, color, text-shadow;
+            animation: deepBlueToWhiteFade 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            -webkit-animation: deepBlueToWhiteFade 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        .fade-letter:nth-child(1) { animation-delay: 0.2s; }
-        .fade-letter:nth-child(2) { animation-delay: 0.5s; }
-        .fade-letter:nth-child(3) { animation-delay: 0.8s; }
-        .fade-letter:nth-child(4) { animation-delay: 1.1s; }
-        .fade-letter:nth-child(5) { animation-delay: 1.4s; }
+        .fade-letter:nth-child(1) { animation-delay: 0.2s; -webkit-animation-delay: 0.2s; }
+        .fade-letter:nth-child(2) { animation-delay: 0.6s; -webkit-animation-delay: 0.6s; }
+        .fade-letter:nth-child(3) { animation-delay: 1.0s; -webkit-animation-delay: 1.0s; }
+        .fade-letter:nth-child(4) { animation-delay: 1.4s; -webkit-animation-delay: 1.4s; }
+        .fade-letter:nth-child(5) { animation-delay: 1.8s; -webkit-animation-delay: 1.8s; }
 
-        @keyframes reverseFadeIn {
+        @keyframes deepBlueToWhiteFade {
             0% {
                 opacity: 0;
+                color: #032b69;
                 filter: blur(16px);
+                -webkit-filter: blur(16px);
                 transform: scale(0.82) translateY(8px);
+                text-shadow: 0 0 10px rgba(3, 43, 105, 0.2);
+            }
+            45% {
+                opacity: 0.85;
+                color: #0369a1;
+                filter: blur(6px);
+                -webkit-filter: blur(6px);
+                text-shadow: 0 0 18px rgba(2, 132, 199, 0.6);
+            }
+            75% {
+                color: #38bdf8;
+                filter: blur(0px);
+                -webkit-filter: blur(0px);
+                text-shadow: 0 0 28px rgba(56, 189, 248, 0.8);
             }
             100% {
                 opacity: 1;
+                color: #ffffff;
                 filter: blur(0px);
+                -webkit-filter: blur(0px);
                 transform: scale(1) translateY(0);
+                text-shadow: 0 0 35px rgba(56, 189, 248, 0.9), 0 0 12px #ffffff;
+            }
+        }
+
+        @-webkit-keyframes deepBlueToWhiteFade {
+            0% {
+                opacity: 0;
+                color: #032b69;
+                -webkit-filter: blur(16px);
+                -webkit-transform: scale(0.82) translateY(8px);
+                text-shadow: 0 0 10px rgba(3, 43, 105, 0.2);
+            }
+            45% {
+                opacity: 0.85;
+                color: #0369a1;
+                -webkit-filter: blur(6px);
+                text-shadow: 0 0 18px rgba(2, 132, 199, 0.6);
+            }
+            75% {
+                color: #38bdf8;
+                -webkit-filter: blur(0px);
+                text-shadow: 0 0 28px rgba(56, 189, 248, 0.8);
+            }
+            100% {
+                opacity: 1;
+                color: #ffffff;
+                -webkit-filter: blur(0px);
+                -webkit-transform: scale(1) translateY(0);
+                text-shadow: 0 0 35px rgba(56, 189, 248, 0.9), 0 0 12px #ffffff;
             }
         }
 
@@ -94,12 +144,18 @@
             color: #94a3b8;
             margin-bottom: 34px;
             opacity: 0;
-            animation: subtitleReveal 1.2s ease 1.8s forwards;
+            animation: subtitleReveal 1.2s ease 2.0s forwards;
+            -webkit-animation: subtitleReveal 1.2s ease 2.0s forwards;
         }
 
         @keyframes subtitleReveal {
             from { opacity: 0; transform: translateY(6px); }
             to { opacity: 0.85; transform: translateY(0); }
+        }
+
+        @-webkit-keyframes subtitleReveal {
+            from { opacity: 0; -webkit-transform: translateY(6px); }
+            to { opacity: 0.85; -webkit-transform: translateY(0); }
         }
 
         /* Dual Orbital Spinner */
@@ -109,10 +165,15 @@
             height: 52px;
             margin-bottom: 24px;
             opacity: 0;
-            animation: spinnerAppear 1s ease 1.5s forwards;
+            animation: spinnerAppear 1s ease 1.6s forwards;
+            -webkit-animation: spinnerAppear 1s ease 1.6s forwards;
         }
 
         @keyframes spinnerAppear {
+            to { opacity: 1; }
+        }
+
+        @-webkit-keyframes spinnerAppear {
             to { opacity: 1; }
         }
 
@@ -124,6 +185,7 @@
             border-top-color: #38bdf8;
             border-right-color: #38bdf8;
             animation: spin 1.2s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+            -webkit-animation: spin 1.2s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
         }
 
         .spinner-inner {
@@ -134,6 +196,7 @@
             border-bottom-color: #0284c7;
             border-left-color: #0284c7;
             animation: spin-reverse 1.5s linear infinite;
+            -webkit-animation: spin-reverse 1.5s linear infinite;
         }
 
         @keyframes spin {
@@ -141,9 +204,19 @@
             100% { transform: rotate(360deg); }
         }
 
+        @-webkit-keyframes spin {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+
         @keyframes spin-reverse {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(-360deg); }
+        }
+
+        @-webkit-keyframes spin-reverse {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(-360deg); }
         }
 
         .loading-status-text {
@@ -152,7 +225,8 @@
             color: #38bdf8;
             letter-spacing: 1px;
             opacity: 0;
-            animation: subtitleReveal 1s ease 2.0s forwards;
+            animation: subtitleReveal 1s ease 2.2s forwards;
+            -webkit-animation: subtitleReveal 1s ease 2.2s forwards;
         }
 
         #map {
@@ -751,7 +825,7 @@
 </head>
 <body>
 
-    <!-- Cinematic Sequential Reverse-Fade AIKYA Splash Screen -->
+    <!-- Cinematic Dark-Blue to Light-Blue/White AIKYA Splash Screen -->
     <div id="aikya-loader">
         <div class="title-container">
             <span class="fade-letter">A</span>
@@ -935,26 +1009,20 @@
     </div>
 
     <script>
-        // --- 5.5-SECOND TIMED DISMISS CONTROLLER ---
-        const pageLoadStartTime = Date.now();
-        const MINIMUM_LOADER_DURATION_MS = 5500; // Display duration: 5.5 seconds
-        let isPotholesLoaded = false;
-
-        function checkAndDismissLoader() {
-            const elapsed = Date.now() - pageLoadStartTime;
-            const remaining = Math.max(0, MINIMUM_LOADER_DURATION_MS - elapsed);
-
+        // --- 6-SECOND HARD-LOCKED SPLASH DISMISSAL ---
+        function triggerFadeOut() {
+            const loader = document.getElementById("aikya-loader");
+            if (!loader) return;
+            loader.style.opacity = "0";
             setTimeout(() => {
-                const loader = document.getElementById("aikya-loader");
-                if (!loader || loader.style.opacity === "0") return;
-                loader.style.opacity = "0";
-                setTimeout(() => {
-                    loader.style.visibility = "hidden";
-                }, 800);
-            }, remaining);
+                loader.style.display = "none";
+            }, 800);
         }
 
-        // Dynamic status updates during the 5.5s countdown
+        // Hard lock: exactly 6000ms
+        setTimeout(triggerFadeOut, 6000);
+
+        // Dynamic status text updates
         setTimeout(() => {
             const status = document.getElementById("loaderStatusText");
             if (status) status.innerText = "CALIBRATING ACCELEROMETER MAPPING...";
@@ -963,7 +1031,7 @@
         setTimeout(() => {
             const status = document.getElementById("loaderStatusText");
             if (status) status.innerText = "SYNCHRONIZING PWD DEFECT MANIFEST...";
-        }, 3800);
+        }, 4200);
 
         // --- Admin Authentication Controller (SMS 2FA) ---
         let pendingAction = null;
@@ -1158,16 +1226,8 @@
                 allPotholes = await res.json();
                 renderDashboard();
                 updateHeatmap();
-                if (!isPotholesLoaded) {
-                    isPotholesLoaded = true;
-                    checkAndDismissLoader();
-                }
             } catch (err) {
                 console.error("Error fetching defect data:", err);
-                if (!isPotholesLoaded) {
-                    isPotholesLoaded = true;
-                    checkAndDismissLoader();
-                }
             }
         }
 
