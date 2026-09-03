@@ -5,6 +5,7 @@ import random
 import time
 import json
 import urllib.request
+import urllib.error
 from typing import List, Optional
 from datetime import datetime
 
@@ -42,7 +43,6 @@ if not os.path.exists(DB_PATH):
 ADMIN_SECRET_KEY = "aikya_admin_2026"
 
 # --- RESEND HTTPS EMAIL 2FA CONFIGURATION ---
-# Read securely via environment variable so GitHub secret scanner allows pushes
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 ADMIN_TARGET_EMAIL = "dtheekshanritwik@gmail.com"
 
@@ -115,7 +115,7 @@ def haversine_meters(lat1, lon1, lat2, lon2):
     return R * c
 
 def send_resend_email_otp(target_email: str, otp_code: str):
-    """Sends OTP via Resend REST HTTPS API (Port 443 - works on Render)."""
+    """Sends OTP via Resend REST HTTPS API with verbose diagnostic error logging."""
     if not RESEND_API_KEY:
         print("[Resend Warning] RESEND_API_KEY environment variable is missing.")
         return
@@ -153,6 +153,9 @@ def send_resend_email_otp(target_email: str, otp_code: str):
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             print(f"[Resend Email Dispatched] Status: {resp.status}")
+    except urllib.error.HTTPError as e:
+        error_details = e.read().decode("utf-8")
+        print(f"[Resend Dispatch Warning] HTTP {e.code} Error: {error_details}")
     except Exception as e:
         print(f"[Resend Dispatch Warning] Could not send via Resend: {e}")
 
