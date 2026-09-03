@@ -898,26 +898,26 @@
             <h2>🛡️ Municipal 2FA Gate</h2>
             <p id="modalSubtitle">Enter officer credentials to dispatch an SMS verification code.</p>
             
-            <!-- Step 1: Credentials Form -->
-            <form id="credForm" onsubmit="handleCredSubmit(event)">
+            <!-- Step 1: Credentials Form (iOS WebKit Safe) -->
+            <form id="credForm" onsubmit="event.preventDefault(); handleCredSubmit(event); return false;">
                 <div class="form-group">
                     <label>Admin Identifier</label>
-                    <input type="text" id="adminUser" class="form-input" required autocomplete="username" placeholder="admin">
+                    <input type="text" id="adminUser" class="form-input" required autocomplete="username" placeholder="admin" autocapitalize="none" autocorrect="off" spellcheck="false">
                 </div>
                 <div class="form-group">
                     <label>Security Password</label>
-                    <input type="password" id="adminPass" class="form-input" required autocomplete="current-password" placeholder="••••••••">
+                    <input type="password" id="adminPass" class="form-input" required autocomplete="current-password" placeholder="••••••••" autocapitalize="none" autocorrect="off" spellcheck="false">
                 </div>
-                <button type="submit" id="btnCred" class="btn-login">Send Verification SMS</button>
+                <button type="button" id="btnCred" class="btn-login" onclick="handleCredSubmit(event)">Send Verification SMS</button>
             </form>
 
             <!-- Step 2: 6-Digit SMS Verification Form -->
-            <form id="otpForm" onsubmit="handleOtpSubmit(event)" style="display: none;">
+            <form id="otpForm" onsubmit="event.preventDefault(); handleOtpSubmit(event); return false;" style="display: none;">
                 <div class="form-group">
                     <label>6-Digit Verification Code</label>
-                    <input type="text" id="adminOtp" class="form-input" maxlength="6" pattern="\d{6}" required placeholder="••••••" style="letter-spacing: 6px; text-align: center; font-size: 1.25rem;">
+                    <input type="text" id="adminOtp" class="form-input" maxlength="6" pattern="\d{6}" required placeholder="••••••" style="letter-spacing: 6px; text-align: center; font-size: 1.25rem;" autocapitalize="none" autocorrect="off">
                 </div>
-                <button type="submit" id="btnOtp" class="btn-login">Verify & Authorize Access</button>
+                <button type="button" id="btnOtp" class="btn-login" onclick="handleOtpSubmit(event)">Verify & Authorize Access</button>
                 <button type="button" onclick="resetAdminModal()" style="background: none; border: none; color: #94a3b8; font-size: 0.75rem; margin-top: 12px; cursor: pointer;">← Re-enter Credentials</button>
             </form>
         </div>
@@ -1064,31 +1064,73 @@
 
         // Step 1: Submit Username & Password -> Dispatches SMS
         async function handleCredSubmit(e) {
-            e.preventDefault();
-            const u = document.getElementById("adminUser").value;
-            const p = document.getElementById("adminPass").value;
+            if (e) {
+                if (typeof e.preventDefault === "function") e.preventDefault();
+                if (typeof e.stopPropagation === "function") e.stopPropagation();
+            }
+
+            const uInput = document.getElementById("adminUser");
+            const pInput = document.getElementById("adminPass");
             const btn = document.getElementById("btnCred");
+
+            const u = uInput ? uInput.value.trim().toLowerCase() : "";
+            const p = pInput ? pInput.value.trim() : "";
+
+            if (!u || !p) {
+                alert("Please enter both username and password.");
+                return;
+            }
 
             btn.innerText = "Dispatching SMS...";
             btn.disabled = true;
 
+            // Enforce a 10-second timeout so iOS WebKit never gets stuck indefinitely
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+
             try {
                 const res = await fetch("/api/admin/login", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username: u, password: p })
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({ username: u, password: p }),
+                    signal: controller.signal
                 });
 
-                if (!res.ok) throw new Error("Invalid login");
-                const data = await res.json();
+                clearTimeout(timeoutId);
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    data = { detail: "Invalid response from server." };
+                }
+
+                if (!res.ok) {
+                    alert(`❌ Login Error (${res.status}): ${data.detail || "Invalid municipal credentials."}`);
+                    return;
+                }
 
                 activeAdminUsername = u;
                 document.getElementById("credForm").style.display = "none";
                 document.getElementById("otpForm").style.display = "block";
                 document.getElementById("modalSubtitle").innerText = data.message || "OTP dispatched to registered authority.";
-                document.getElementById("adminOtp").focus();
+                
+                // Allow iOS UI thread to settle before focusing OTP field
+                setTimeout(() => {
+                    const otpField = document.getElementById("adminOtp");
+                    if (otpField) otpField.focus();
+                }, 150);
+
             } catch (err) {
-                alert("❌ Authentication failed. Invalid municipal credentials.");
+                clearTimeout(timeoutId);
+                if (err.name === 'AbortError') {
+                    alert("⏱️ Request timed out. The server took too long to respond.");
+                } else {
+                    alert("❌ Network Error: Could not complete request on this browser.");
+                }
             } finally {
                 btn.innerText = "Send Verification SMS";
                 btn.disabled = false;
@@ -1097,22 +1139,49 @@
 
         // Step 2: Submit 6-Digit OTP -> Authorizes and Stores Token
         async function handleOtpSubmit(e) {
-            e.preventDefault();
-            const otpVal = document.getElementById("adminOtp").value;
+            if (e) {
+                if (typeof e.preventDefault === "function") e.preventDefault();
+                if (typeof e.stopPropagation === "function") e.stopPropagation();
+            }
+
+            const otpVal = document.getElementById("adminOtp").value.trim();
             const btn = document.getElementById("btnOtp");
+
+            if (!otpVal || otpVal.length !== 6) {
+                alert("Please enter the complete 6-digit code.");
+                return;
+            }
 
             btn.innerText = "Verifying...";
             btn.disabled = true;
 
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+
             try {
                 const res = await fetch("/api/admin/verify-otp", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username: activeAdminUsername, otp: otpVal })
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({ username: activeAdminUsername, otp: otpVal }),
+                    signal: controller.signal
                 });
 
-                if (!res.ok) throw new Error("Invalid or expired OTP");
-                const data = await res.json();
+                clearTimeout(timeoutId);
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    data = { detail: "Invalid response from server." };
+                }
+
+                if (!res.ok) {
+                    alert(`❌ Verification failed: ${data.detail || "Incorrect or expired OTP code."}`);
+                    return;
+                }
 
                 localStorage.setItem("aikya_admin_token", data.token);
                 closeAdminModal();
@@ -1123,7 +1192,12 @@
                     actionToRun();
                 }
             } catch (err) {
-                alert("❌ Verification failed. Incorrect or expired OTP code.");
+                clearTimeout(timeoutId);
+                if (err.name === 'AbortError') {
+                    alert("⏱️ Verification timed out. Please retry.");
+                } else {
+                    alert("❌ Network error verifying OTP.");
+                }
             } finally {
                 btn.innerText = "Verify & Authorize Access";
                 btn.disabled = false;
@@ -1148,16 +1222,17 @@
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
 
+        // Initialize directly with satelliteMap as the active layer
         const map = L.map('map', { 
             zoomControl: false, 
-            layers: [topoMap] 
+            layers: [satelliteMap] 
         }).setView([12.8231, 80.0451], 16);
 
         L.control.zoom({ position: 'topright' }).addTo(map);
 
         const baseMaps = {
-            "🗺️ Topo Terrain (Default)": topoMap,
-            "🛰️ Satellite": satelliteMap
+            "🛰️ Satellite (Default)": satelliteMap,
+            "🗺️ Topo Terrain": topoMap
         };
 
         const depotIcon = L.divIcon({
