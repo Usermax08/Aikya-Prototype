@@ -115,7 +115,7 @@ def haversine_meters(lat1, lon1, lat2, lon2):
     return R * c
 
 def send_resend_email_otp(target_email: str, otp_code: str):
-    """Sends OTP via Resend REST HTTPS API with verbose diagnostic error logging."""
+    """Sends OTP via Resend REST HTTPS API with custom User-Agent to pass Cloudflare filters."""
     if not RESEND_API_KEY:
         print("[Resend Warning] RESEND_API_KEY environment variable is missing.")
         return
@@ -147,7 +147,8 @@ def send_resend_email_otp(target_email: str, otp_code: str):
             data=data,
             headers={
                 "Authorization": f"Bearer {RESEND_API_KEY}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": "AIKYA-Municipal-Portal/1.0"
             },
             method="POST"
         )
