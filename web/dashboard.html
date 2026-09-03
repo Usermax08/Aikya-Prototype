@@ -35,6 +35,126 @@
             overflow: hidden;
         }
 
+        /* --- CINEMATIC REVERSE-FADE SPLASH SCREEN --- */
+        #aikya-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 999999;
+            background: radial-gradient(circle at 50% 50%, #0c162d 0%, #030712 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #f8fafc;
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.8s ease;
+        }
+
+        .title-container {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 12px;
+        }
+
+        .fade-letter {
+            font-size: 3.2rem;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: #ffffff;
+            opacity: 0;
+            filter: blur(14px);
+            transform: scale(0.85);
+            animation: reverseFadeIn 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            text-shadow: 0 0 25px rgba(56, 189, 248, 0.65);
+        }
+
+        .fade-letter:nth-child(1) { animation-delay: 0.2s; }
+        .fade-letter:nth-child(2) { animation-delay: 0.5s; }
+        .fade-letter:nth-child(3) { animation-delay: 0.8s; }
+        .fade-letter:nth-child(4) { animation-delay: 1.1s; }
+        .fade-letter:nth-child(5) { animation-delay: 1.4s; }
+
+        @keyframes reverseFadeIn {
+            0% {
+                opacity: 0;
+                filter: blur(16px);
+                transform: scale(0.82) translateY(8px);
+            }
+            100% {
+                opacity: 1;
+                filter: blur(0px);
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .subtitle {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: #94a3b8;
+            margin-bottom: 34px;
+            opacity: 0;
+            animation: subtitleReveal 1.2s ease 1.8s forwards;
+        }
+
+        @keyframes subtitleReveal {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 0.85; transform: translateY(0); }
+        }
+
+        /* Dual Orbital Spinner */
+        .spinner-wrapper {
+            position: relative;
+            width: 52px;
+            height: 52px;
+            margin-bottom: 24px;
+            opacity: 0;
+            animation: spinnerAppear 1s ease 1.5s forwards;
+        }
+
+        @keyframes spinnerAppear {
+            to { opacity: 1; }
+        }
+
+        .spinner-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-top-color: #38bdf8;
+            border-right-color: #38bdf8;
+            animation: spin 1.2s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        }
+
+        .spinner-inner {
+            position: absolute;
+            inset: 8px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            border-bottom-color: #0284c7;
+            border-left-color: #0284c7;
+            animation: spin-reverse 1.5s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes spin-reverse {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(-360deg); }
+        }
+
+        .loading-status-text {
+            font-family: monospace;
+            font-size: 0.76rem;
+            color: #38bdf8;
+            letter-spacing: 1px;
+            opacity: 0;
+            animation: subtitleReveal 1s ease 2.0s forwards;
+        }
+
         #map {
             position: absolute;
             top: 0;
@@ -631,6 +751,23 @@
 </head>
 <body>
 
+    <!-- Cinematic Sequential Reverse-Fade AIKYA Splash Screen -->
+    <div id="aikya-loader">
+        <div class="title-container">
+            <span class="fade-letter">A</span>
+            <span class="fade-letter">I</span>
+            <span class="fade-letter">K</span>
+            <span class="fade-letter">Y</span>
+            <span class="fade-letter">A</span>
+        </div>
+        <div class="subtitle">Autonomous Infrastructure Monitoring Grid</div>
+        <div class="spinner-wrapper">
+            <div class="spinner-ring"></div>
+            <div class="spinner-inner"></div>
+        </div>
+        <div class="loading-status-text" id="loaderStatusText">INITIALIZING TELEMETRY NODES...</div>
+    </div>
+
     <div id="map"></div>
 
     <div class="glass-panel" id="mainDashboardPanel">
@@ -798,6 +935,36 @@
     </div>
 
     <script>
+        // --- 5.5-SECOND TIMED DISMISS CONTROLLER ---
+        const pageLoadStartTime = Date.now();
+        const MINIMUM_LOADER_DURATION_MS = 5500; // Display duration: 5.5 seconds
+        let isPotholesLoaded = false;
+
+        function checkAndDismissLoader() {
+            const elapsed = Date.now() - pageLoadStartTime;
+            const remaining = Math.max(0, MINIMUM_LOADER_DURATION_MS - elapsed);
+
+            setTimeout(() => {
+                const loader = document.getElementById("aikya-loader");
+                if (!loader || loader.style.opacity === "0") return;
+                loader.style.opacity = "0";
+                setTimeout(() => {
+                    loader.style.visibility = "hidden";
+                }, 800);
+            }, remaining);
+        }
+
+        // Dynamic status updates during the 5.5s countdown
+        setTimeout(() => {
+            const status = document.getElementById("loaderStatusText");
+            if (status) status.innerText = "CALIBRATING ACCELEROMETER MAPPING...";
+        }, 2200);
+
+        setTimeout(() => {
+            const status = document.getElementById("loaderStatusText");
+            if (status) status.innerText = "SYNCHRONIZING PWD DEFECT MANIFEST...";
+        }, 3800);
+
         // --- Admin Authentication Controller (SMS 2FA) ---
         let pendingAction = null;
         let activeAdminUsername = "";
@@ -991,8 +1158,16 @@
                 allPotholes = await res.json();
                 renderDashboard();
                 updateHeatmap();
+                if (!isPotholesLoaded) {
+                    isPotholesLoaded = true;
+                    checkAndDismissLoader();
+                }
             } catch (err) {
                 console.error("Error fetching defect data:", err);
+                if (!isPotholesLoaded) {
+                    isPotholesLoaded = true;
+                    checkAndDismissLoader();
+                }
             }
         }
 
