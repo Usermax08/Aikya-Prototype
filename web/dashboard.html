@@ -47,7 +47,14 @@
             justify-content: center;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             color: #f8fafc;
-            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.8s ease;
+            transition: opacity 0.6s ease;
+            -webkit-transition: opacity 0.6s ease;
+        }
+
+        #aikya-loader.loader-dismissed {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            visibility: hidden !important;
         }
 
         .title-container {
@@ -62,8 +69,8 @@
             letter-spacing: 4px;
             color: #034694;
             opacity: 0;
-            filter: blur(14px);
-            -webkit-filter: blur(14px);
+            filter: blur(12px);
+            -webkit-filter: blur(12px);
             transform: scale(0.85);
             -webkit-transform: scale(0.85);
             will-change: transform, opacity, filter, color, text-shadow;
@@ -81,16 +88,16 @@
             0% {
                 opacity: 0;
                 color: #032b69;
-                filter: blur(16px);
-                -webkit-filter: blur(16px);
+                filter: blur(14px);
+                -webkit-filter: blur(14px);
                 transform: scale(0.82) translateY(8px);
                 text-shadow: 0 0 10px rgba(3, 43, 105, 0.2);
             }
             45% {
                 opacity: 0.85;
                 color: #0369a1;
-                filter: blur(6px);
-                -webkit-filter: blur(6px);
+                filter: blur(5px);
+                -webkit-filter: blur(5px);
                 text-shadow: 0 0 18px rgba(2, 132, 199, 0.6);
             }
             75% {
@@ -113,14 +120,14 @@
             0% {
                 opacity: 0;
                 color: #032b69;
-                -webkit-filter: blur(16px);
+                -webkit-filter: blur(14px);
                 -webkit-transform: scale(0.82) translateY(8px);
                 text-shadow: 0 0 10px rgba(3, 43, 105, 0.2);
             }
             45% {
                 opacity: 0.85;
                 color: #0369a1;
-                -webkit-filter: blur(6px);
+                -webkit-filter: blur(5px);
                 text-shadow: 0 0 18px rgba(2, 132, 199, 0.6);
             }
             75% {
@@ -1009,20 +1016,37 @@
     </div>
 
     <script>
-        // --- 6-SECOND HARD-LOCKED SPLASH DISMISSAL ---
+        // --- 6-SECOND HARD-LOCKED SPLASH DISMISSAL (WITH WEBKIT FAILSAFES) ---
         function triggerFadeOut() {
             const loader = document.getElementById("aikya-loader");
             if (!loader) return;
+            
+            // Immediately drop touch-blockers
+            loader.classList.add("loader-dismissed");
+            loader.style.pointerEvents = "none";
             loader.style.opacity = "0";
+
             setTimeout(() => {
                 loader.style.display = "none";
-            }, 800);
+                if (loader.parentNode) {
+                    loader.parentNode.removeChild(loader);
+                }
+                // Invalidate Leaflet map size to ensure full tile rendering on iOS
+                if (typeof map !== "undefined" && map.invalidateSize) {
+                    map.invalidateSize();
+                }
+            }, 600);
         }
 
-        // Hard lock: exactly 6000ms
+        // Hard dismiss at exactly 6000ms
         setTimeout(triggerFadeOut, 6000);
 
-        // Dynamic status text updates
+        // Fallback: dismiss if window finishes loading and safety timer fires
+        window.addEventListener("load", () => {
+            setTimeout(triggerFadeOut, 6200);
+        });
+
+        // Dynamic status updates
         setTimeout(() => {
             const status = document.getElementById("loaderStatusText");
             if (status) status.innerText = "CALIBRATING ACCELEROMETER MAPPING...";
@@ -1222,7 +1246,7 @@
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
 
-        // Initialize directly with satelliteMap as the active layer
+        // Initialize directly with satelliteMap as default
         const map = L.map('map', { 
             zoomControl: false, 
             layers: [satelliteMap] 
