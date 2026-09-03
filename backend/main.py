@@ -1,6 +1,11 @@
 import os
 import sqlite3
 import math
+import random
+import time
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from typing import List, Optional
 from datetime import datetime
 
@@ -28,15 +33,22 @@ WEB_DIR = os.path.join(PROJECT_ROOT, "web")
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
-# Point to your primary SQLite DB
+# Point to primary SQLite DB
 DB_PATH = os.path.join(BASE_DIR, "potholes.db")
 if not os.path.exists(DB_PATH):
-    # Fallback if aikya.db is used
     alt_db = os.path.join(BASE_DIR, "aikya.db")
     if os.path.exists(alt_db):
         DB_PATH = alt_db
 
 ADMIN_SECRET_KEY = "aikya_admin_2026"
+
+# --- GMAIL 2FA CONFIGURATION ---
+SMTP_SENDER_EMAIL = "dtheekshanritwik@gmail.com"
+SMTP_APP_PASSWORD = "bawi simk nqdu pfuv"
+ADMIN_TARGET_EMAIL = "dtheekshanritwik@gmail.com"
+
+# In-memory OTP storage: {"username": {"otp": "123456", "expires": timestamp}}
+OTP_STORE = {}
 
 # --- DATABASE INITIALIZATION ---
 def init_db():
@@ -81,6 +93,10 @@ class AdminLoginRequest(BaseModel):
     username: str
     password: str
 
+class VerifyOtpRequest(BaseModel):
+    username: str
+    otp: str
+
 class StatusUpdateRequest(BaseModel):
     pothole_id: int
     status: str
@@ -98,6 +114,33 @@ def haversine_meters(lat1, lon1, lat2, lon2):
     a = math.sin(delta_phi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
+
+def send_email_otp(target_email: str, otp_code: str):
+    """Dispatches a 6-digit OTP directly to your Gmail inbox via SMTP."""
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"🚨 AIKYA Municipal 2FA Code: {otp_code}"
+    msg["From"] = f"AIKYA Security Gate <{SMTP_SENDER_EMAIL}>"
+    msg["To"] = target_email
+
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; border-radius: 12px; max-width: 480px;">
+        <h2 style="color: #38bdf8; margin-top: 0;">AIKYA Command Gate</h2>
+        <p style="color: #94a3b8; font-size: 14px;">An administrative sign-in was attempted for the PWD road defect console.</p>
+        <div style="background: #1e293b; padding: 16px; border-radius: 8px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #38bdf8; font-family: monospace;">{otp_code}</span>
+        </div>
+        <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">This passcode is valid for 5 minutes. If this was not you, review server access logs immediately.</p>
+    </div>
+    """
+    msg.attach(MIMEText(html_content, "html"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
+            server.login(SMTP_SENDER_EMAIL, SMTP_APP_PASSWORD)
+            server.sendmail(SMTP_SENDER_EMAIL, target_email, msg.as_string())
+        print(f"[Email Dispatched] 2FA sent successfully to {target_email}")
+    except Exception as e:
+        print(f"[Email Dispatch Warning] Could not send via Gmail: {e}")
 
 # --- CORE API ROUTES ---
 
@@ -124,7 +167,6 @@ def get_potholes():
 
 @app.post("/api/telemetry")
 def process_telemetry(data: TelemetryPayload):
-    # Shock threshold check (dynamic spike >= 11.8 m/s²)
     max_z = max(data.z_raw) if data.z_raw else 0.0
     is_spike = max_z >= 11.8
 
@@ -134,7 +176,6 @@ def process_telemetry(data: TelemetryPayload):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Spatial clustering (5m radius)
     cursor.execute("SELECT id, lat, lng, hit_count FROM potholes WHERE status != 'resolved'")
     active_potholes = cursor.fetchall()
 
@@ -183,7 +224,6 @@ async def citizen_report(
         "INSERT INTO reports (lat, lng, description, photo_path) VALUES (?, ?, ?, ?)",
         (lat, lng, description, saved_filename)
     )
-    # Also create/update pothole ticket
     cursor.execute(
         "INSERT INTO potholes (lat, lng, severity, hit_count, status) VALUES (?, ?, ?, ?, ?)",
         (lat, lng, "medium", 3, "active")
@@ -193,13 +233,51 @@ async def citizen_report(
 
     return {"success": True, "message": "Grievance recorded successfully."}
 
-# --- SECURE ADMIN & RBAC ROUTES ---
+# --- SECURE ADMIN 2FA ROUTES ---
 
 @app.post("/api/admin/login")
 def admin_login(req: AdminLoginRequest):
-    if req.username == "admin" and req.password == "pwd@aikya2026":
-        return {"success": True, "token": ADMIN_SECRET_KEY}
-    raise HTTPException(status_code=401, detail="Invalid admin credentials.")
+    if req.username != "admin" or req.password != "pwd@aikya2026":
+        raise HTTPException(status_code=401, detail="Invalid admin credentials.")
+
+    # Generate 6-digit random OTP
+    otp = f"{random.randint(100000, 999999)}"
+    OTP_STORE[req.username] = {
+        "otp": otp,
+        "expires": time.time() + 300  # Valid for 5 minutes
+    }
+
+    # Dispatch Email to registered administrator
+    send_email_otp(ADMIN_TARGET_EMAIL, otp)
+
+    # Server console fallback log
+    print("\n" + "=" * 46)
+    print("✉️  [AIKYA GMAIL 2FA DISPATCHED]")
+    print(f"Target Inbox:  {ADMIN_TARGET_EMAIL}")
+    print(f"6-Digit OTP:   {otp}")
+    print("=" * 46 + "\n")
+
+    return {
+        "success": True,
+        "otp_required": True,
+        "message": f"6-digit verification code sent to registered authority inbox."
+    }
+
+@app.post("/api/admin/verify-otp")
+def verify_admin_otp(req: VerifyOtpRequest):
+    record = OTP_STORE.get(req.username)
+    if not record:
+        raise HTTPException(status_code=400, detail="No OTP pending. Please submit credentials again.")
+
+    if time.time() > record["expires"]:
+        OTP_STORE.pop(req.username, None)
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new code.")
+
+    if req.otp.strip() != record["otp"]:
+        raise HTTPException(status_code=401, detail="Incorrect OTP verification code.")
+
+    OTP_STORE.pop(req.username, None)
+    return {"success": True, "token": ADMIN_SECRET_KEY}
 
 @app.patch("/api/potholes/status")
 def update_pothole_status(req: StatusUpdateRequest, authorization: Optional[str] = Header(None)):

@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIKYA - PWD Admin Console</title>
+    <title>AIKYA Municipal Admin Portal - Secure Command</title>
     <style>
         :root {
-            --bg-base: #020617;
-            --bg-panel: #0f172a;
-            --border: #1e293b;
+            --bg-dark: #020617;
+            --panel-bg: #0f172a;
+            --border-color: #1e293b;
             --accent-cyan: #38bdf8;
             --accent-blue: #0284c7;
             --danger: #ef4444;
@@ -21,201 +21,290 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg-base);
+            background: var(--bg-dark);
             color: var(--text-main);
-            padding: 24px;
             min-height: 100vh;
+            padding: 24px;
         }
 
-        .container {
+        .admin-container {
             max-width: 1100px;
             margin: 0 auto;
         }
 
-        /* Login Modal Overlay */
-        #loginOverlay {
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(2, 6, 23, 0.96);
-            backdrop-filter: blur(8px);
-            z-index: 3000;
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 1.4rem;
+            color: var(--accent-cyan);
+            font-weight: 800;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-nav {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #f8fafc;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .btn-nav:hover { background: #334155; border-color: var(--accent-cyan); }
+        .btn-danger { background: rgba(239, 68, 68, 0.15); border-color: var(--danger); color: #fca5a5; }
+        .btn-danger:hover { background: var(--danger); color: #fff; }
+
+        /* Lockout Screen (2FA SMS Login) */
+        #authScreen {
             display: flex;
             align-items: center;
             justify-content: center;
+            min-height: 70vh;
         }
-        .login-card {
-            background: var(--bg-panel);
-            border: 1px solid var(--border);
-            padding: 32px;
-            border-radius: 14px;
+
+        .login-box {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 36px 30px;
             width: 100%;
             max-width: 380px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.8);
             text-align: center;
+            box-shadow: 0 20px 45px rgba(0,0,0,0.8);
         }
-        .login-card h2 { color: var(--accent-cyan); margin-bottom: 8px; font-size: 1.4rem; }
-        .login-card p { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px; }
-        .form-group { margin-bottom: 16px; text-align: left; }
-        .form-group label { font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
+
+        .login-box h2 {
+            font-size: 1.3rem;
+            color: var(--accent-cyan);
+            margin-bottom: 6px;
+        }
+
+        .login-box p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 22px;
+            line-height: 1.4;
+        }
+
+        .form-group {
+            text-align: left;
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 700;
+            display: block;
+            margin-bottom: 6px;
+        }
+
         .form-input {
             width: 100%;
             background: #020617;
-            border: 1px solid #334155;
-            padding: 10px 12px;
-            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 8px;
             color: #fff;
-            margin-top: 5px;
             outline: none;
+            font-size: 0.85rem;
         }
+        .form-input:focus { border-color: var(--accent-cyan); }
+
         .btn-login {
             width: 100%;
             background: var(--accent-blue);
             color: white;
             border: none;
             padding: 12px;
-            border-radius: 6px;
+            border-radius: 8px;
             font-weight: 700;
+            font-size: 0.88rem;
             cursor: pointer;
-            margin-top: 10px;
+            margin-top: 8px;
+            transition: background 0.15s ease;
+        }
+        .btn-login:hover { background: #0369a1; }
+
+        /* Protected Management View */
+        #adminView {
+            display: none;
         }
 
-        /* Dashboard Top Bar */
-        .admin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 18px;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 24px;
-        }
-        .admin-title { font-size: 1.4rem; color: var(--accent-cyan); font-weight: 800; display: flex; align-items: center; gap: 8px; }
-        .admin-actions { display: flex; gap: 10px; }
-        .btn-header {
-            background: #1e293b;
-            color: #fff;
-            border: 1px solid #334155;
-            padding: 8px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            text-decoration: none;
-        }
-
-        /* Table Grid */
-        .table-wrap {
-            background: var(--bg-panel);
-            border: 1px solid var(--border);
-            border-radius: 10px;
+        .table-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
         }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.82rem;
             text-align: left;
+            font-size: 0.82rem;
         }
+
         th {
-            background: #1e293b;
+            background: #090d16;
             color: var(--text-muted);
             padding: 14px 16px;
+            font-size: 0.72rem;
             text-transform: uppercase;
-            font-size: 0.7rem;
             letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-color);
         }
+
         td {
             padding: 14px 16px;
-            border-bottom: 1px solid #1e293b;
+            border-bottom: 1px solid var(--border-color);
             color: #e2e8f0;
         }
-        tr:hover { background: #17233a; }
 
-        .select-status {
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+
+        .badge {
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .badge-high { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); }
+        .badge-medium { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.4); }
+        .badge-low { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.4); }
+        .badge-resolved { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.4); }
+
+        .status-select {
             background: #020617;
+            border: 1px solid var(--border-color);
             color: #fff;
-            border: 1px solid #334155;
             padding: 6px 10px;
             border-radius: 6px;
             font-size: 0.78rem;
             cursor: pointer;
             outline: none;
         }
-
-        .badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 800;
-            text-transform: uppercase;
-        }
-        .badge-high { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid var(--danger); }
-        .badge-medium { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid var(--warning); }
-        .badge-low { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; border: 1px solid var(--accent-cyan); }
+        .status-select:focus { border-color: var(--accent-cyan); }
     </style>
 </head>
 <body>
 
-    <div id="loginOverlay">
-        <div class="login-card">
-            <h2>🛡️ Admin Authentication</h2>
-            <p>Enter municipal credentials to access the work order dispatch console.</p>
-            <form onsubmit="handleLogin(event)">
-                <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" id="adminUser" class="form-input" required autocomplete="username" placeholder="admin">
-                </div>
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" id="adminPass" class="form-input" required autocomplete="current-password" placeholder="••••••••">
-                </div>
-                <button type="submit" class="btn-login">Sign In to Command Center</button>
-            </form>
-        </div>
-    </div>
-
-    <div class="container">
-        <div class="admin-header">
-            <div class="admin-title">
-                🛡️ AIKYA PWD Admin Management Console
+    <div class="admin-container">
+        <div class="header">
+            <div>
+                <h1>🛡️ AIKYA PWD Administrative Gate</h1>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Municipal Road Maintenance & Triage Management</span>
             </div>
-            <div class="admin-actions">
-                <a href="/" class="btn-header">🗺️ Public Map</a>
-                <button class="btn-header" onclick="logoutAdmin()" style="background: #ef4444; border-color: #dc2626;">🚪 Sign Out</button>
+            <div class="header-nav">
+                <a href="/" class="btn-nav">🗺️ Live GIS Map</a>
+                <button id="btnLogout" class="btn-nav btn-danger" style="display: none;" onclick="handleLogout()">🔒 Terminate Session</button>
             </div>
         </div>
 
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Ticket ID</th>
-                        <th>Severity</th>
-                        <th>Sensor Hits</th>
-                        <th>Coordinates</th>
-                        <th>Current Status</th>
-                        <th>Admin Action</th>
-                    </tr>
-                </thead>
-                <tbody id="adminTableBody">
-                    <!-- Loaded dynamically -->
-                </tbody>
-            </table>
+        <!-- 2FA SMS Authentication Screen -->
+        <div id="authScreen">
+            <div class="login-box">
+                <h2>Officer Authorization</h2>
+                <p id="authSubtitle">Provide administrative credentials to request an SMS verification passcode.</p>
+
+                <!-- Step 1: User & Password -->
+                <form id="loginCredForm" onsubmit="handleAdminLogin(event)">
+                    <div class="form-group">
+                        <label>Admin Identifier</label>
+                        <input type="text" id="loginUser" class="form-input" required autocomplete="username" placeholder="admin">
+                    </div>
+                    <div class="form-group">
+                        <label>Security Password</label>
+                        <input type="password" id="loginPass" class="form-input" required autocomplete="current-password" placeholder="••••••••">
+                    </div>
+                    <button type="submit" id="btnLoginSubmit" class="btn-login">Send Verification SMS</button>
+                </form>
+
+                <!-- Step 2: 6-Digit OTP Field -->
+                <form id="loginOtpForm" onsubmit="handleAdminOtp(event)" style="display: none;">
+                    <div class="form-group">
+                        <label>6-Digit Verification Code</label>
+                        <input type="text" id="loginOtp" class="form-input" maxlength="6" pattern="\d{6}" required placeholder="••••••" style="letter-spacing: 6px; text-align: center; font-size: 1.25rem;">
+                    </div>
+                    <button type="submit" id="btnOtpSubmit" class="btn-login">Verify & Authorize Access</button>
+                    <button type="button" onclick="resetLoginForm()" style="background: none; border: none; color: var(--text-muted); font-size: 0.75rem; margin-top: 12px; cursor: pointer;">← Re-enter Credentials</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Protected Admin View -->
+        <div id="adminView">
+            <div class="table-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Incident ID</th>
+                            <th>GPS Coordinates</th>
+                            <th>Severity</th>
+                            <th>Sensor Confirmations</th>
+                            <th>Current Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="potholeTableBody">
+                        <!-- Populated via API -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <script>
-        let adminToken = localStorage.getItem("aikya_admin_token");
+        const AUTH_TOKEN_KEY = "aikya_admin_token";
+        let activeAdminUser = "";
 
-        if (adminToken) {
-            document.getElementById("loginOverlay").style.display = "none";
-            loadAdminData();
+        function checkSession() {
+            const token = localStorage.getItem(AUTH_TOKEN_KEY);
+            if (token === "aikya_admin_2026") {
+                document.getElementById("authScreen").style.display = "none";
+                document.getElementById("adminView").style.display = "block";
+                document.getElementById("btnLogout").style.display = "block";
+                loadPotholes();
+            } else {
+                document.getElementById("authScreen").style.display = "flex";
+                document.getElementById("adminView").style.display = "none";
+                document.getElementById("btnLogout").style.display = "none";
+            }
         }
 
-        async function handleLogin(e) {
+        function resetLoginForm() {
+            document.getElementById("loginCredForm").style.display = "block";
+            document.getElementById("loginOtpForm").style.display = "none";
+            document.getElementById("authSubtitle").innerText = "Provide administrative credentials to request an SMS verification passcode.";
+            document.getElementById("loginOtp").value = "";
+        }
+
+        async function handleAdminLogin(e) {
             e.preventDefault();
-            const u = document.getElementById("adminUser").value;
-            const p = document.getElementById("adminPass").value;
+            const u = document.getElementById("loginUser").value;
+            const p = document.getElementById("loginPass").value;
+            const btn = document.getElementById("btnLoginSubmit");
+
+            btn.innerText = "Dispatching SMS...";
+            btn.disabled = true;
 
             try {
                 const res = await fetch("/api/admin/login", {
@@ -224,73 +313,109 @@
                     body: JSON.stringify({ username: u, password: p })
                 });
 
-                if (!res.ok) throw new Error("Invalid login");
+                if (!res.ok) throw new Error("Invalid credentials");
                 const data = await res.json();
-                
-                adminToken = data.token;
-                localStorage.setItem("aikya_admin_token", adminToken);
-                document.getElementById("loginOverlay").style.display = "none";
-                loadAdminData();
+
+                activeAdminUser = u;
+                document.getElementById("loginCredForm").style.display = "none";
+                document.getElementById("loginOtpForm").style.display = "block";
+                document.getElementById("authSubtitle").innerText = data.message || "OTP dispatched to registered authority.";
+                document.getElementById("loginOtp").focus();
             } catch (err) {
-                alert("Authentication failed. Please verify credentials.");
+                alert("❌ Authentication failed. Invalid administrative credentials.");
+            } finally {
+                btn.innerText = "Send Verification SMS";
+                btn.disabled = false;
             }
         }
 
-        function logoutAdmin() {
-            localStorage.removeItem("aikya_admin_token");
-            window.location.reload();
+        async function handleAdminOtp(e) {
+            e.preventDefault();
+            const otp = document.getElementById("loginOtp").value;
+            const btn = document.getElementById("btnOtpSubmit");
+
+            btn.innerText = "Verifying...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch("/api/admin/verify-otp", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: activeAdminUser, otp: otp })
+                });
+
+                if (!res.ok) throw new Error("Invalid or expired OTP");
+                const data = await res.json();
+
+                localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+                checkSession();
+            } catch (err) {
+                alert("❌ Verification failed. Incorrect or expired OTP passcode.");
+            } finally {
+                btn.innerText = "Verify & Authorize Access";
+                btn.disabled = false;
+            }
         }
 
-        async function loadAdminData() {
+        function handleLogout() {
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+            checkSession();
+        }
+
+        async function loadPotholes() {
             try {
                 const res = await fetch("/api/potholes");
-                const defects = await res.json();
-                const tbody = document.getElementById("adminTableBody");
+                const list = await res.json();
+                const tbody = document.getElementById("potholeTableBody");
                 tbody.innerHTML = "";
 
-                defects.forEach(p => {
+                list.forEach(p => {
                     const tr = document.createElement("tr");
+                    const badgeClass = p.status === "resolved" ? "badge-resolved" : (p.severity === "high" ? "badge-high" : (p.severity === "medium" ? "badge-medium" : "badge-low"));
+
                     tr.innerHTML = `
                         <td><b>#PWD-${String(p.id).padStart(4, '0')}</b></td>
-                        <td><span class="badge badge-${p.severity}">${p.severity}</span></td>
-                        <td><b>${p.hit_count}</b> vehicles</td>
                         <td><code>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</code></td>
-                        <td><b>${p.status.toUpperCase()}</b></td>
+                        <td><span class="badge ${badgeClass}">${p.severity.toUpperCase()}</span></td>
+                        <td>${p.hit_count} Cross-Vehicle Hits</td>
                         <td>
-                            <select class="select-status" onchange="updateStatus(${p.id}, this.value)">
-                                <option value="active" ${p.status === 'active' ? 'selected' : ''}>Active (Pending)</option>
-                                <option value="in-progress" ${p.status === 'in-progress' ? 'selected' : ''}>In-Progress</option>
-                                <option value="resolved" ${p.status === 'resolved' ? 'selected' : ''}>Resolved / Patched</option>
+                            <select class="status-select" onchange="updateStatus(${p.id}, this.value)">
+                                <option value="active" ${p.status === 'active' ? 'selected' : ''}>ACTIVE</option>
+                                <option value="in_progress" ${p.status === 'in_progress' ? 'selected' : ''}>IN PROGRESS</option>
+                                <option value="resolved" ${p.status === 'resolved' ? 'selected' : ''}>RESOLVED</option>
                             </select>
+                        </td>
+                        <td>
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" style="color: var(--accent-cyan); text-decoration: none; font-size: 0.78rem;">🗺️ Map Route</a>
                         </td>
                     `;
                     tbody.appendChild(tr);
                 });
             } catch (err) {
-                console.error("Error loading admin table:", err);
+                console.error("Failed to load defect queue:", err);
             }
         }
 
         async function updateStatus(potholeId, newStatus) {
+            const token = localStorage.getItem(AUTH_TOKEN_KEY);
             try {
                 const res = await fetch("/api/potholes/status", {
                     method: "PATCH",
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": `Bearer ${adminToken}`
+                        "Authorization": `Bearer ${token}`
                     },
-                    body: JSON.stringify({
-                        pothole_id: potholeId,
-                        status: newStatus
-                    })
+                    body: JSON.stringify({ pothole_id: potholeId, status: newStatus })
                 });
 
-                if (!res.ok) throw new Error("Failed to update status");
-                loadAdminData();
+                if (!res.ok) throw new Error("Failed status update");
             } catch (err) {
-                alert("Failed to update ticket status. Check admin authorization.");
+                alert("❌ Could not update incident status. Session may have expired.");
+                handleLogout();
             }
         }
+
+        checkSession();
     </script>
 </body>
 </html>

@@ -519,7 +519,7 @@
             background: #0369a1;
         }
 
-        /* --- Admin Modal Styles --- */
+        /* --- Admin Modal Styles (2FA SMS Enabled) --- */
         #adminModalOverlay {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
@@ -568,6 +568,7 @@
             cursor: pointer;
             margin-top: 10px;
             font-size: 0.88rem;
+            transition: background 0.15s ease;
         }
         .btn-login:hover { background: #0369a1; }
         .close-modal-btn {
@@ -679,22 +680,34 @@
         </div>
     </div>
 
-    <!-- Admin Authentication Modal Overlay -->
+    <!-- Admin Authentication Modal Overlay (Two-Stage SMS 2FA) -->
     <div id="adminModalOverlay">
         <div class="login-card">
             <button class="close-modal-btn" onclick="closeAdminModal()">✕</button>
-            <h2>🛡️ Admin Authentication</h2>
-            <p>Enter municipal credentials to access protected work orders and manifests.</p>
-            <form onsubmit="handleAdminSubmit(event)">
+            <h2>🛡️ Municipal 2FA Gate</h2>
+            <p id="modalSubtitle">Enter officer credentials to dispatch an SMS verification code.</p>
+            
+            <!-- Step 1: Credentials Form -->
+            <form id="credForm" onsubmit="handleCredSubmit(event)">
                 <div class="form-group">
-                    <label>Username</label>
+                    <label>Admin Identifier</label>
                     <input type="text" id="adminUser" class="form-input" required autocomplete="username" placeholder="admin">
                 </div>
                 <div class="form-group">
-                    <label>Password</label>
+                    <label>Security Password</label>
                     <input type="password" id="adminPass" class="form-input" required autocomplete="current-password" placeholder="••••••••">
                 </div>
-                <button type="submit" class="btn-login">Sign In to Command Center</button>
+                <button type="submit" id="btnCred" class="btn-login">Send Verification SMS</button>
+            </form>
+
+            <!-- Step 2: 6-Digit SMS Verification Form -->
+            <form id="otpForm" onsubmit="handleOtpSubmit(event)" style="display: none;">
+                <div class="form-group">
+                    <label>6-Digit Verification Code</label>
+                    <input type="text" id="adminOtp" class="form-input" maxlength="6" pattern="\d{6}" required placeholder="••••••" style="letter-spacing: 6px; text-align: center; font-size: 1.25rem;">
+                </div>
+                <button type="submit" id="btnOtp" class="btn-login">Verify & Authorize Access</button>
+                <button type="button" onclick="resetAdminModal()" style="background: none; border: none; color: #94a3b8; font-size: 0.75rem; margin-top: 12px; cursor: pointer;">← Re-enter Credentials</button>
             </form>
         </div>
     </div>
@@ -733,9 +746,9 @@
                 <div class="sop-label" style="margin-bottom: 8px; color: #38bdf8;">Standard Operating Procedure (SOP) Checklist</div>
                 <label class="checklist-item"><input type="checkbox" checked> <b>1. Safety Buffer:</b> Position reflective safety cones 30m prior to impact zone.</label>
                 <label class="checklist-item"><input type="checkbox" checked> <b>2. Debris Clearing:</b> High-pressure air purge to clear aggregate dust.</label>
-                <label class="checklist-item"><input type="checkbox"> <b>3. Application:</b> Apply bitumen emulsion tack coat to edge walls.</label>
-                <label class="checklist-item"><input type="checkbox"> <b>4. Compaction:</b> Level hot/cold asphalt mix with 3-pass mechanical compactor.</label>
-                <label class="checklist-item"><input type="checkbox"> <b>5. Auto-Verification:</b> Telemetry pass will close ticket in AIKYA portal.</label>
+                <label class="checklist-item"><input type="checkbox" checked> <b>3. Application:</b> Apply bitumen emulsion tack coat to edge walls.</label>
+                <label class="checklist-item"><input type="checkbox" checked> <b>4. Compaction:</b> Level hot/cold asphalt mix with 3-pass mechanical compactor.</label>
+                <label class="checklist-item"><input type="checkbox" checked> <b>5. Auto-Verification:</b> Telemetry pass will close ticket in AIKYA portal.</label>
             </div>
 
             <div class="print-only" style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 24px; border-top: 1px dashed #94a3b8; padding-top: 16px;">
@@ -785,8 +798,9 @@
     </div>
 
     <script>
-        // --- Admin Authentication Controller ---
+        // --- Admin Authentication Controller (SMS 2FA) ---
         let pendingAction = null;
+        let activeAdminUsername = "";
 
         function requestAdminAction(actionCallback) {
             const token = localStorage.getItem("aikya_admin_token");
@@ -796,8 +810,16 @@
             }
 
             pendingAction = actionCallback;
+            resetAdminModal();
             document.getElementById("adminModalOverlay").style.display = "flex";
             document.getElementById("adminUser").focus();
+        }
+
+        function resetAdminModal() {
+            document.getElementById("credForm").style.display = "block";
+            document.getElementById("otpForm").style.display = "none";
+            document.getElementById("modalSubtitle").innerText = "Enter officer credentials to dispatch an SMS verification code.";
+            document.getElementById("adminOtp").value = "";
         }
 
         function closeAdminModal() {
@@ -805,10 +827,15 @@
             pendingAction = null;
         }
 
-        async function handleAdminSubmit(e) {
+        // Step 1: Submit Username & Password -> Dispatches SMS
+        async function handleCredSubmit(e) {
             e.preventDefault();
             const u = document.getElementById("adminUser").value;
             const p = document.getElementById("adminPass").value;
+            const btn = document.getElementById("btnCred");
+
+            btn.innerText = "Dispatching SMS...";
+            btn.disabled = true;
 
             try {
                 const res = await fetch("/api/admin/login", {
@@ -820,6 +847,38 @@
                 if (!res.ok) throw new Error("Invalid login");
                 const data = await res.json();
 
+                activeAdminUsername = u;
+                document.getElementById("credForm").style.display = "none";
+                document.getElementById("otpForm").style.display = "block";
+                document.getElementById("modalSubtitle").innerText = data.message || "OTP dispatched to registered authority.";
+                document.getElementById("adminOtp").focus();
+            } catch (err) {
+                alert("❌ Authentication failed. Invalid municipal credentials.");
+            } finally {
+                btn.innerText = "Send Verification SMS";
+                btn.disabled = false;
+            }
+        }
+
+        // Step 2: Submit 6-Digit OTP -> Authorizes and Stores Token
+        async function handleOtpSubmit(e) {
+            e.preventDefault();
+            const otpVal = document.getElementById("adminOtp").value;
+            const btn = document.getElementById("btnOtp");
+
+            btn.innerText = "Verifying...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch("/api/admin/verify-otp", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: activeAdminUsername, otp: otpVal })
+                });
+
+                if (!res.ok) throw new Error("Invalid or expired OTP");
+                const data = await res.json();
+
                 localStorage.setItem("aikya_admin_token", data.token);
                 closeAdminModal();
 
@@ -829,7 +888,10 @@
                     actionToRun();
                 }
             } catch (err) {
-                alert("❌ Authentication failed. Invalid municipal credentials.");
+                alert("❌ Verification failed. Incorrect or expired OTP code.");
+            } finally {
+                btn.innerText = "Verify & Authorize Access";
+                btn.disabled = false;
             }
         }
 
