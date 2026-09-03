@@ -3,9 +3,8 @@ import sqlite3
 import math
 import random
 import time
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import json
+import urllib.request
 from typing import List, Optional
 from datetime import datetime
 
@@ -42,9 +41,9 @@ if not os.path.exists(DB_PATH):
 
 ADMIN_SECRET_KEY = "aikya_admin_2026"
 
-# --- GMAIL 2FA CONFIGURATION ---
-SMTP_SENDER_EMAIL = "dtheekshanritwik@gmail.com"
-SMTP_APP_PASSWORD = "bawi simk nqdu pfuv"
+# --- RESEND HTTPS EMAIL 2FA CONFIGURATION ---
+# Read securely via environment variable so GitHub secret scanner allows pushes
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 ADMIN_TARGET_EMAIL = "dtheekshanritwik@gmail.com"
 
 # In-memory OTP storage: {"username": {"otp": "123456", "expires": timestamp}}
@@ -115,13 +114,14 @@ def haversine_meters(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-def send_email_otp(target_email: str, otp_code: str):
-    """Dispatches a 6-digit OTP directly to your Gmail inbox via SMTP."""
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🚨 AIKYA Municipal 2FA Code: {otp_code}"
-    msg["From"] = f"AIKYA Security Gate <{SMTP_SENDER_EMAIL}>"
-    msg["To"] = target_email
+def send_resend_email_otp(target_email: str, otp_code: str):
+    """Sends OTP via Resend REST HTTPS API (Port 443 - works on Render)."""
+    if not RESEND_API_KEY:
+        print("[Resend Warning] RESEND_API_KEY environment variable is missing.")
+        return
 
+    url = "https://api.resend.com/emails"
+    
     html_content = f"""
     <div style="font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; border-radius: 12px; max-width: 480px;">
         <h2 style="color: #38bdf8; margin-top: 0;">AIKYA Command Gate</h2>
@@ -132,15 +132,29 @@ def send_email_otp(target_email: str, otp_code: str):
         <p style="color: #94a3b8; font-size: 12px; margin-bottom: 0;">This passcode is valid for 5 minutes. If this was not you, review server access logs immediately.</p>
     </div>
     """
-    msg.attach(MIMEText(html_content, "html"))
+    
+    payload = {
+        "from": "AIKYA Security <onboarding@resend.dev>",
+        "to": [target_email],
+        "subject": f"🚨 AIKYA Municipal 2FA Code: {otp_code}",
+        "html": html_content
+    }
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
-            server.login(SMTP_SENDER_EMAIL, SMTP_APP_PASSWORD)
-            server.sendmail(SMTP_SENDER_EMAIL, target_email, msg.as_string())
-        print(f"[Email Dispatched] 2FA sent successfully to {target_email}")
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f"[Resend Email Dispatched] Status: {resp.status}")
     except Exception as e:
-        print(f"[Email Dispatch Warning] Could not send via Gmail: {e}")
+        print(f"[Resend Dispatch Warning] Could not send via Resend: {e}")
 
 # --- CORE API ROUTES ---
 
@@ -247,12 +261,12 @@ def admin_login(req: AdminLoginRequest):
         "expires": time.time() + 300  # Valid for 5 minutes
     }
 
-    # Dispatch Email to registered administrator
-    send_email_otp(ADMIN_TARGET_EMAIL, otp)
+    # Dispatch via Resend HTTPS API
+    send_resend_email_otp(ADMIN_TARGET_EMAIL, otp)
 
-    # Server console fallback log
+    # Server console fallback log (always visible in Render live logs)
     print("\n" + "=" * 46)
-    print("✉️  [AIKYA GMAIL 2FA DISPATCHED]")
+    print("✉️  [AIKYA RESEND 2FA DISPATCHED]")
     print(f"Target Inbox:  {ADMIN_TARGET_EMAIL}")
     print(f"6-Digit OTP:   {otp}")
     print("=" * 46 + "\n")
@@ -260,7 +274,7 @@ def admin_login(req: AdminLoginRequest):
     return {
         "success": True,
         "otp_required": True,
-        "message": f"6-digit verification code sent to registered authority inbox."
+        "message": "6-digit verification code sent to registered authority inbox."
     }
 
 @app.post("/api/admin/verify-otp")
