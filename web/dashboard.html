@@ -17,7 +17,7 @@
             --border-glass: #1e293b;
             --accent-cyan: #38bdf8;
             --accent-blue: #0284c7;
-            --danger: #ef4444;
+            --danger: #991b1b;
             --warning: #f59e0b;
             --success: #10b981;
             --text-main: #f8fafc;
@@ -245,7 +245,7 @@
             z-index: 1;
         }
 
-        /* --- BLINKING & PULSING RADAR EFFECT FOR HIGH-SEVERITY DEFECTS --- */
+        /* --- INTENSE DARK CRIMSON BLINKING / RADAR EFFECT --- */
         .leaflet-marker-icon.high-defect-blinking {
             position: relative;
             background: transparent;
@@ -255,41 +255,44 @@
         .pulse-core {
             width: 14px;
             height: 14px;
-            background-color: #ef4444;
+            background-color: #7f1d1d; /* Deep crimson */
             border: 2px solid #ffffff;
             border-radius: 50%;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            box-shadow: 0 0 12px #ef4444;
+            box-shadow: 0 0 14px rgba(127, 29, 29, 1);
             z-index: 2;
         }
 
         .pulse-wave {
-            width: 14px;
-            height: 14px;
-            background-color: rgba(239, 68, 68, 0.6);
+            width: 16px;
+            height: 16px;
+            background-color: rgba(153, 27, 27, 0.95); /* Heavy dark crimson */
+            border: 2px solid #7f1d1d; /* Dark red perimeter */
             border-radius: 50%;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            animation: radarPulse 1.8s ease-out infinite;
+            animation: radarPulse 1.6s ease-out infinite;
             z-index: 1;
+            box-shadow: 0 0 12px rgba(127, 29, 29, 0.9);
         }
 
         @keyframes radarPulse {
             0% {
                 transform: translate(-50%, -50%) scale(1);
-                opacity: 0.9;
+                opacity: 0.95;
             }
-            70% {
-                transform: translate(-50%, -50%) scale(3.2);
-                opacity: 0;
+            60% {
+                transform: translate(-50%, -50%) scale(2.6);
+                opacity: 0.5;
+                background-color: rgba(127, 29, 29, 0.6);
             }
             100% {
-                transform: translate(-50%, -50%) scale(3.5);
+                transform: translate(-50%, -50%) scale(3.2);
                 opacity: 0;
             }
         }
@@ -488,7 +491,7 @@
             transform: translateY(-2px);
             background: #273549;
         }
-        .ticket.high { border-left-color: #ef4444; }
+        .ticket.high { border-left-color: #7f1d1d; }
         .ticket.medium { border-left-color: #f59e0b; }
         .ticket.low { border-left-color: #38bdf8; }
         .ticket.resolved { border-left-color: #10b981; }
@@ -512,9 +515,9 @@
             letter-spacing: 0.5px;
         }
         .badge-high {
-            background: rgba(239, 68, 68, 0.2);
+            background: rgba(127, 29, 29, 0.35);
             color: #fca5a5;
-            border: 1px solid rgba(239, 68, 68, 0.4);
+            border: 1px solid rgba(127, 29, 29, 0.7);
         }
         .badge-medium {
             background: rgba(245, 158, 11, 0.2);
@@ -995,7 +998,7 @@
             </div>
 
             <div class="sop-grid">
-                <div class="sop-card" style="border-left-color: #ef4444;">
+                <div class="sop-card" style="border-left-color: #7f1d1d;">
                     <div class="sop-label">Priority & Resolution SLA</div>
                     <div class="sop-value" id="modal-sla">Immediate (Within 4 Hours)</div>
                 </div>
@@ -1293,6 +1296,7 @@
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
 
+        // Initialize directly with satelliteMap as default
         const map = L.map('map', { 
             zoomControl: false, 
             layers: [satelliteMap] 
@@ -1329,7 +1333,7 @@
 
         function getMarkerColor(p) {
             if (p.status === 'resolved') return '#10b981';
-            if (p.severity === 'high') return '#ef4444';
+            if (p.severity === 'high') return '#7f1d1d'; /* Deep crimson */
             if (p.severity === 'medium') return '#f59e0b';
             return '#38bdf8';
         }
@@ -1349,7 +1353,7 @@
                     radius: 28,
                     blur: 16,
                     maxZoom: 17,
-                    gradient: { 0.3: '#38bdf8', 0.65: '#f59e0b', 1.0: '#ef4444' }
+                    gradient: { 0.3: '#38bdf8', 0.65: '#f59e0b', 1.0: '#7f1d1d' }
                 });
 
                 const overlays = {
@@ -1414,8 +1418,8 @@
                         const blinkingIcon = L.divIcon({
                             className: 'high-defect-blinking',
                             html: '<div class="pulse-wave"></div><div class="pulse-core"></div>',
-                            iconSize: [20, 20],
-                            iconAnchor: [10, 10]
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
                         });
                         marker = L.marker([p.lat, p.lng], { icon: blinkingIcon }).addTo(map);
                     } else {
