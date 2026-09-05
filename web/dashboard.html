@@ -213,7 +213,7 @@
 
         @-webkit-keyframes spin {
             0% { -webkit-transform: rotate(0deg); }
-            100% { -webkit-transform: rotate(360deg); }
+            100% { -webkit-transform: rotate(-360deg); }
         }
 
         @keyframes spin-reverse {
@@ -483,6 +483,57 @@
             letter-spacing: 0.5px;
         }
 
+        /* Route Planner Panel */
+        .route-planner-box {
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        .route-planner-box label {
+            font-size: 0.68rem;
+            color: var(--accent-cyan);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .route-input-row {
+            display: flex;
+            gap: 6px;
+        }
+        .route-input-row input {
+            flex: 1;
+            background: #090d16;
+            border: 1px solid #334155;
+            padding: 7px 10px;
+            color: #fff;
+            border-radius: 5px;
+            font-size: 0.78rem;
+            outline: none;
+        }
+        .route-input-row input:focus { border-color: #38bdf8; }
+        .btn-route-calc {
+            background: #0284c7;
+            color: #fff;
+            border: none;
+            padding: 7px 12px;
+            border-radius: 5px;
+            font-weight: 700;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .btn-route-calc:hover { background: #0369a1; }
+        .route-status-msg {
+            font-size: 0.72rem;
+            color: #38bdf8;
+            margin-top: 6px;
+            font-family: monospace;
+        }
+
         .filter-tabs {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -539,6 +590,7 @@
         .ticket.medium { border-left-color: #f59e0b; }
         .ticket.low { border-left-color: #38bdf8; }
         .ticket.resolved { border-left-color: #10b981; }
+        .ticket.on-route { box-shadow: 0 0 12px rgba(56, 189, 248, 0.35); border: 1.5px solid #38bdf8; }
 
         .ticket-head {
             display: flex;
@@ -577,6 +629,11 @@
             background: rgba(16, 185, 129, 0.2);
             color: #6ee7b7;
             border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+        .badge-route {
+            background: rgba(2, 132, 199, 0.3);
+            color: #38bdf8;
+            border: 1px solid #38bdf8;
         }
 
         .ticket-body {
@@ -1027,6 +1084,16 @@
             <span class="node-tag">SRMIST NODE</span>
         </div>
 
+        <!-- Route & Hazard Intersect Planner Box -->
+        <div class="route-planner-box">
+            <label>Route & Hazard Intersect Planner</label>
+            <div class="route-input-row">
+                <input type="text" id="routeDestinationInput" placeholder="Enter Destination (e.g., Potheri Station)" value="Potheri Railway Station">
+                <button type="button" class="btn-route-calc" onclick="calculateRouteAndFilterHazards()">Plan Route</button>
+            </div>
+            <div class="route-status-msg" id="routeStatusMsg">Status: Ready for destination input.</div>
+        </div>
+
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-val" id="count-active">12</div>
@@ -1040,8 +1107,8 @@
 
         <div class="filter-tabs">
             <button class="filter-tab active" onclick="setFilter('all', this)">All</button>
+            <button class="filter-tab" onclick="setFilter('on-route', this)">On Route</button>
             <button class="filter-tab" onclick="setFilter('high', this)">High</button>
-            <button class="filter-tab" onclick="setFilter('medium', this)">Medium</button>
             <button class="filter-tab" onclick="setFilter('resolved', this)">Resolved</button>
         </div>
 
@@ -1161,7 +1228,7 @@
 
             <div id="chatMessages">
                 <div class="chat-msg bot">
-                    👋 <b>Hello Officer!</b> Ask me about active potholes, material requisitions, or our speed-breaker filtering logic.
+                    👋 <b>Hello Officer!</b> Ask me about active potholes, material requisitions, or our speed-bump filtering logic.
                 </div>
             </div>
 
@@ -1481,10 +1548,10 @@
             } catch (err) {
                 console.error("Using localized corridor manifest with Speed Breakers:", err);
                 allPotholes = [
-                    { id: 1, lat: 12.82310, lng: 80.04510, severity: "high", type: "pothole", status: "pending", hit_count: 9 },
-                    { id: 2, lat: 12.82450, lng: 80.04280, severity: "medium", type: "pothole", status: "pending", hit_count: 4 },
-                    { id: 3, lat: 12.82180, lng: 80.04750, severity: "low", type: "speed_breaker", status: "pending", hit_count: 22 }, // Mapped Speed Breaker
-                    { id: 4, lat: 12.82620, lng: 80.04400, severity: "low", type: "pothole", status: "resolved", hit_count: 14 }
+                    { id: 1, lat: 12.82310, lng: 80.04510, severity: "high", type: "pothole", status: "pending", hit_count: 9, onRoute: false },
+                    { id: 2, lat: 12.82450, lng: 80.04280, severity: "medium", type: "pothole", status: "pending", hit_count: 4, onRoute: false },
+                    { id: 3, lat: 12.82180, lng: 80.04750, severity: "low", type: "speed_breaker", status: "pending", hit_count: 22, onRoute: false },
+                    { id: 4, lat: 12.82620, lng: 80.04400, severity: "low", type: "pothole", status: "resolved", hit_count: 14, onRoute: false }
                 ];
             }
             renderDashboard();
@@ -1496,6 +1563,80 @@
             document.querySelectorAll('.filter-tab').forEach(btn => btn.classList.remove('active'));
             el.classList.add('active');
             renderDashboard();
+        }
+
+        // --- ROUTE & HAZARD CORRIDOR INTERSECT ENGINE ---
+        async function calculateRouteAndFilterHazards() {
+            const destQuery = document.getElementById('routeDestinationInput').value.trim();
+            const statusMsg = document.getElementById('routeStatusMsg');
+            if (!destQuery) return alert("Please enter a destination.");
+
+            statusMsg.innerText = "Status: Geocoding destination...";
+
+            try {
+                // 1. Geocode destination using Nominatim
+                const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destQuery)}`);
+                const geoData = await geoRes.json();
+
+                if (!geoData || geoData.length === 0) {
+                    statusMsg.innerText = "Status: Destination not found.";
+                    return alert("Could not find destination coordinates.");
+                }
+
+                const destLat = parseFloat(geoData[0].lat);
+                const destLng = parseFloat(geoData[0].lon);
+
+                // Use current driver position or depot as origin
+                const originLat = lastKnownCoords ? lastKnownCoords.latitude : DEPOT_COORDS[0];
+                const originLng = lastKnownCoords ? lastKnownCoords.longitude : DEPOT_COORDS[1];
+
+                statusMsg.innerText = "Status: Calculating OSRM route...";
+
+                // 2. Fetch OSRM driving route
+                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+                const routeRes = await fetch(osrmUrl);
+                const routeData = await routeRes.json();
+
+                if (!routeData.routes || routeData.routes.length === 0) {
+                    statusMsg.innerText = "Status: No driving route found.";
+                    return alert("No navigable driving route found.");
+                }
+
+                const routeCoords = routeData.routes[0].geometry.coordinates; // [ [lng, lat], ... ]
+
+                // Draw route on map
+                if (activeRouteLayer) map.removeLayer(activeRouteLayer);
+                activeRouteLayer = L.geoJSON(routeData.routes[0].geometry, {
+                    style: { color: '#38bdf8', weight: 6, opacity: 0.9, dashArray: '1, 6', lineCap: 'round' }
+                }).addTo(map);
+                map.fitBounds(activeRouteLayer.getBounds(), { padding: [45, 45] });
+
+                // 3. Intersect Hazards with Route Polyline (within 35 meters)
+                let onRouteCount = 0;
+                allPotholes.forEach(p => {
+                    let minDistanceToRoute = 999999;
+                    routeCoords.forEach(coord => {
+                        const dist = computeHaversineMeters(p.lat, p.lng, coord[1], coord[0]);
+                        if (dist < minDistanceToRoute) {
+                            minDistanceToRoute = dist;
+                        }
+                    });
+
+                    if (minDistanceToRoute <= 35.0) {
+                        p.onRoute = true;
+                        onRouteCount++;
+                    } else {
+                        p.onRoute = false;
+                    }
+                });
+
+                statusMsg.innerText = `Status: Route active. Found ${onRouteCount} hazards on path!`;
+                renderDashboard();
+
+            } catch (err) {
+                console.error("Routing error:", err);
+                statusMsg.innerText = "Status: Routing failed.";
+            }
         }
 
         function renderDashboard() {
@@ -1514,7 +1655,7 @@
                     <div style="min-width: 190px;">
                         <div class="popup-title" style="color: #f59e0b;">⚡ Speed Breaker Hump</div>
                         <div class="popup-row">Crossed By: <b>${p.hit_count} vehicles</b></div>
-                        <div class="popup-row">Status: <b>ADVISORY MAPPED</b></div>
+                        <div class="popup-row">On Planned Route: <b>${p.onRoute ? 'YES ⚠️' : 'NO'}</b></div>
                         <div class="popup-row">Coords: <code>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</code></div>
                         <button class="btn-popup btn-gmaps-pop" onclick="requestAdminAction(() => window.open('${gmapsUrl}', '_blank'))">🗺️ Open in Google Maps</button>
                     </div>
@@ -1522,8 +1663,8 @@
                     <div style="min-width: 190px;">
                         <div class="popup-title">Defect #${p.id} (${p.severity.toUpperCase()})</div>
                         <div class="popup-row">Sensor Hits: <b>${p.hit_count} vehicles</b></div>
+                        <div class="popup-row">On Planned Route: <b>${p.onRoute ? 'YES ⚠️' : 'NO'}</b></div>
                         <div class="popup-row">Status: <b>${p.status.toUpperCase()}</b></div>
-                        <div class="popup-row">Coords: <code>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</code></div>
                         <button class="btn-popup btn-playbook-pop" onclick="requestAdminAction(() => openPlaybook(${p.id}))">📋 View Incident Playbook</button>
                         <button class="btn-popup btn-dispatch-pop" onclick="requestAdminAction(() => planRouteToPothole(${p.id}, ${p.lat}, ${p.lng}))">🚚 Dispatch Repair Route</button>
                         <button class="btn-popup btn-gmaps-pop" onclick="requestAdminAction(() => window.open('${gmapsUrl}', '_blank'))">🗺️ Open in Google Maps</button>
@@ -1563,10 +1704,6 @@
 
                     marker.bindPopup(popupHtml);
                     markers[p.id] = marker;
-                } else {
-                    if (markers[p.id].setStyle && !isSpeedBreaker) {
-                        markers[p.id].setStyle({ fillColor: getMarkerColor(p) });
-                    }
                 }
             });
 
@@ -1575,6 +1712,7 @@
 
             const filtered = allPotholes.filter(p => {
                 if (currentFilter === 'all') return true;
+                if (currentFilter === 'on-route') return p.onRoute === true;
                 if (currentFilter === 'resolved') return p.status === 'resolved';
                 return p.severity === currentFilter && p.status !== 'resolved';
             });
@@ -1587,12 +1725,15 @@
             filtered.forEach(p => {
                 const item = document.createElement('div');
                 const isSpeedBreaker = (p.type === 'speed_breaker');
-                item.className = `ticket ${isSpeedBreaker ? 'medium' : (p.status === 'resolved' ? 'resolved' : p.severity)}`;
+                item.className = `ticket ${p.onRoute ? 'on-route' : (isSpeedBreaker ? 'medium' : (p.status === 'resolved' ? 'resolved' : p.severity))}`;
                 
                 let badgeClass = 'badge-low';
                 let badgeText = 'LOW RISK';
 
-                if (isSpeedBreaker) {
+                if (p.onRoute) {
+                    badgeClass = 'badge-route';
+                    badgeText = 'ON ROUTE ⚠️';
+                } else if (isSpeedBreaker) {
                     badgeClass = 'badge-medium';
                     badgeText = 'SPEED BREAKER';
                 } else if (p.status === 'resolved') {
@@ -1612,7 +1753,7 @@
                         <span class="badge ${badgeClass}">${badgeText}</span>
                     </div>
                     <div class="ticket-body">
-                        ${isSpeedBreaker ? 'Crossings Recorded' : 'Hits Recorded'}: <b>${p.hit_count} vehicles</b>
+                        ${isSpeedBreaker ? 'Crossings' : 'Hits'}: <b>${p.hit_count} vehicles</b> ${p.onRoute ? '<span style="color:#38bdf8; font-weight:700;">• On Path</span>' : ''}
                         <div class="coords-line">
                             📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}
                         </div>
@@ -1717,6 +1858,7 @@
                     "Work Order ID": `PWD-DEF-${String(p.id).padStart(4, '0')}`,
                     "Infrastructure Type": p.type === 'speed_breaker' ? 'Speed Breaker Hump' : 'Pothole Defect',
                     "Priority / Class": priority,
+                    "On Planned Route": p.onRoute ? "YES" : "NO",
                     "Status": p.status.toUpperCase(),
                     "Sensor Crossings": `${p.hit_count} vehicles`,
                     "Latitude": parseFloat(p.lat.toFixed(5)),
@@ -1813,7 +1955,6 @@
             window.addEventListener(evt, () => ensureAudioContext(), { once: true, passive: true });
         });
 
-        // Critical Pothole Warning Alarm (Harsh dual-tone buzzer)
         function playHazardBeep(severity = 'high') {
             ensureAudioContext();
             if (!audioCtx) return;
@@ -1830,12 +1971,11 @@
             }
         }
 
-        // Gentle Speed Breaker Advisory Chime (Soft double-beep)
         function playAdvisoryChime() {
             ensureAudioContext();
             if (!audioCtx) return;
 
-            playCabinAlarmPulse(523.25, 659.25, 0.0, 0.15); // C5 to E5
+            playCabinAlarmPulse(523.25, 659.25, 0.0, 0.15);
             playCabinAlarmPulse(523.25, 659.25, 0.22, 0.15);
         }
 
@@ -1879,7 +2019,7 @@
 
         function triggerAdvisoryHaptic() {
             if (!navigator.vibrate) return;
-            navigator.vibrate([150, 100, 150]); // Short double pulse for speed breaker
+            navigator.vibrate([150, 100, 150]);
         }
 
         function displayHazardBanner(distance, customText = null, customBg = null, customBorder = null) {
