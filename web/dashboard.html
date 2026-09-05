@@ -1085,17 +1085,21 @@
             <span class="node-tag">SRMIST NODE</span>
         </div>
 
-        <!-- Route & Hazard Intersect Planner Box (With Preset Buttons) -->
+        <!-- Route & Hazard Intersect Planner Box (With Exact Preset Coordinates) -->
         <div class="route-planner-box">
             <label>Route & Hazard Intersect Planner</label>
             <div class="route-input-row">
                 <input type="text" id="routeDestinationInput" placeholder="Select preset or type..." value="Potheri Railway Station">
                 <button type="button" class="btn-route-calc" onclick="calculateRouteAndFilterHazards()">Plan</button>
             </div>
-            <div style="display: flex; gap: 4px; font-size: 0.65rem; margin-bottom: 4px;">
-                <button type="button" onclick="setPresetDestination('Potheri Railway Station', 12.82076, 80.03687)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">Potheri Stn</button>
-                <button type="button" onclick="setPresetDestination('SRM General Hospital', 12.82450, 80.04400)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">SRM Hospital</button>
-                <button type="button" onclick="setPresetDestination('Guduvancheri', 12.91650, 80.06120)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">Guduvancheri</button>
+            <div style="display: flex; gap: 4px; font-size: 0.65rem; margin-bottom: 4px; flex-wrap: wrap;">
+                <button type="button" onclick="setPresetDestination('Potheri Stn', 12.82076, 80.03687)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">Potheri Stn</button>
+                <button type="button" onclick="setPresetDestination('SRM Hospital', 12.82450, 80.04400)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">SRM Hospital</button>
+                <button type="button" onclick="setPresetDestination('Guduvancheri', 12.84519, 80.06055)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">Guduvancheri</button>
+                <button type="button" onclick="setPresetDestination('Perungalathur', 12.91738, 80.08588)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">Perungalathur</button>
+                <button type="button" onclick="setPresetDestination('Maraimalai Nagar', 12.78450, 80.01520)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">MM Nagar</button>
+                <button type="button" onclick="setPresetDestination('Vandalur Zoo', 12.88720, 80.08250)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">Vandalur Zoo</button>
+                <button type="button" onclick="setPresetDestination('Tambaram', 12.92490, 80.11320)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">Tambaram</button>
             </div>
             <div class="route-status-msg" id="routeStatusMsg">Status: Ready. Select preset for instant routing.</div>
         </div>
@@ -1462,7 +1466,7 @@
         let heatLayer = null;
         let layerControl = null;
         let driverMarker = null;
-        let selectedDestCoords = null;
+        let selectedDestCoords = { lat: 12.82076, lng: 80.03687 }; // Default preset
 
         const topoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
             maxZoom: 17,
@@ -1588,7 +1592,7 @@
                 destLng = selectedDestCoords.lng;
             } else {
                 const destQuery = document.getElementById('routeDestinationInput').value.trim();
-                if (!destQuery) return alert("Please enter a destination.");
+                if (!destQuery) return alert("Please enter or select a destination.");
 
                 statusMsg.innerText = "Status: Geocoding destination...";
                 try {
@@ -1596,7 +1600,7 @@
                     const geoData = await geoRes.json();
                     if (!geoData || geoData.length === 0) {
                         statusMsg.innerText = "Status: Not found. Use presets below.";
-                        return alert("Could not resolve destination coordinates via Nominatim. Please use the quick-select preset buttons below the input box.");
+                        return alert("Could not resolve destination coordinates. Please use the quick-select preset buttons below.");
                     }
                     destLat = parseFloat(geoData[0].lat);
                     destLng = parseFloat(geoData[0].lon);
