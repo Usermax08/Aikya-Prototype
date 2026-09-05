@@ -213,7 +213,7 @@
 
         @-webkit-keyframes spin {
             0% { -webkit-transform: rotate(0deg); }
-            100% { -webkit-transform: rotate(-360deg); }
+            100% { -webkit-transform: rotate(360deg); }
         }
 
         @keyframes spin-reverse {
@@ -483,7 +483,7 @@
             letter-spacing: 0.5px;
         }
 
-        /* Route Planner Panel */
+        /* Route Planner Box with Presets */
         .route-planner-box {
             background: #1e293b;
             border: 1px solid #334155;
@@ -503,6 +503,7 @@
         .route-input-row {
             display: flex;
             gap: 6px;
+            margin-bottom: 6px;
         }
         .route-input-row input {
             flex: 1;
@@ -1084,14 +1085,19 @@
             <span class="node-tag">SRMIST NODE</span>
         </div>
 
-        <!-- Route & Hazard Intersect Planner Box -->
+        <!-- Route & Hazard Intersect Planner Box (With Preset Buttons) -->
         <div class="route-planner-box">
             <label>Route & Hazard Intersect Planner</label>
             <div class="route-input-row">
-                <input type="text" id="routeDestinationInput" placeholder="Enter Destination (e.g., Potheri Station)" value="Potheri Railway Station">
-                <button type="button" class="btn-route-calc" onclick="calculateRouteAndFilterHazards()">Plan Route</button>
+                <input type="text" id="routeDestinationInput" placeholder="Select preset or type..." value="Potheri Railway Station">
+                <button type="button" class="btn-route-calc" onclick="calculateRouteAndFilterHazards()">Plan</button>
             </div>
-            <div class="route-status-msg" id="routeStatusMsg">Status: Ready for destination input.</div>
+            <div style="display: flex; gap: 4px; font-size: 0.65rem; margin-bottom: 4px;">
+                <button type="button" onclick="setPresetDestination('Potheri Railway Station', 12.82076, 80.03687)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">Potheri Stn</button>
+                <button type="button" onclick="setPresetDestination('SRM General Hospital', 12.82450, 80.04400)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">SRM Hospital</button>
+                <button type="button" onclick="setPresetDestination('Guduvancheri', 12.91650, 80.06120)" style="background:#1e293b; border:1px solid #334155; color:#38bdf8; padding:3px 6px; border-radius:4px; cursor:pointer;">Guduvancheri</button>
+            </div>
+            <div class="route-status-msg" id="routeStatusMsg">Status: Ready. Select preset for instant routing.</div>
         </div>
 
         <div class="stats-grid">
@@ -1228,7 +1234,7 @@
 
             <div id="chatMessages">
                 <div class="chat-msg bot">
-                    👋 <b>Hello Officer!</b> Ask me about active potholes, material requisitions, or our speed-bump filtering logic.
+                    👋 <b>Hello Officer!</b> Ask me about active potholes, material requisitions, or our speed-breaker filtering logic.
                 </div>
             </div>
 
@@ -1456,6 +1462,7 @@
         let heatLayer = null;
         let layerControl = null;
         let driverMarker = null;
+        let selectedDestCoords = null;
 
         const topoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
             maxZoom: 17,
@@ -1565,34 +1572,46 @@
             renderDashboard();
         }
 
+        function setPresetDestination(name, lat, lng) {
+            document.getElementById('routeDestinationInput').value = name;
+            selectedDestCoords = { lat, lng };
+            document.getElementById('routeStatusMsg').innerText = `Status: Preset loaded (${name}). Click Plan.`;
+        }
+
         // --- ROUTE & HAZARD CORRIDOR INTERSECT ENGINE ---
         async function calculateRouteAndFilterHazards() {
-            const destQuery = document.getElementById('routeDestinationInput').value.trim();
             const statusMsg = document.getElementById('routeStatusMsg');
-            if (!destQuery) return alert("Please enter a destination.");
+            let destLat, destLng;
 
-            statusMsg.innerText = "Status: Geocoding destination...";
+            if (selectedDestCoords) {
+                destLat = selectedDestCoords.lat;
+                destLng = selectedDestCoords.lng;
+            } else {
+                const destQuery = document.getElementById('routeDestinationInput').value.trim();
+                if (!destQuery) return alert("Please enter a destination.");
+
+                statusMsg.innerText = "Status: Geocoding destination...";
+                try {
+                    const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destQuery)}`);
+                    const geoData = await geoRes.json();
+                    if (!geoData || geoData.length === 0) {
+                        statusMsg.innerText = "Status: Not found. Use presets below.";
+                        return alert("Could not resolve destination coordinates via Nominatim. Please use the quick-select preset buttons below the input box.");
+                    }
+                    destLat = parseFloat(geoData[0].lat);
+                    destLng = parseFloat(geoData[0].lon);
+                } catch (e) {
+                    statusMsg.innerText = "Status: Geocoding network error.";
+                    return alert("Network error reaching geocoder. Please use the preset buttons.");
+                }
+            }
+
+            const originLat = lastKnownCoords ? lastKnownCoords.latitude : DEPOT_COORDS[0];
+            const originLng = lastKnownCoords ? lastKnownCoords.longitude : DEPOT_COORDS[1];
+
+            statusMsg.innerText = "Status: Calculating OSRM route...";
 
             try {
-                // 1. Geocode destination using Nominatim
-                const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destQuery)}`);
-                const geoData = await geoRes.json();
-
-                if (!geoData || geoData.length === 0) {
-                    statusMsg.innerText = "Status: Destination not found.";
-                    return alert("Could not find destination coordinates.");
-                }
-
-                const destLat = parseFloat(geoData[0].lat);
-                const destLng = parseFloat(geoData[0].lon);
-
-                // Use current driver position or depot as origin
-                const originLat = lastKnownCoords ? lastKnownCoords.latitude : DEPOT_COORDS[0];
-                const originLng = lastKnownCoords ? lastKnownCoords.longitude : DEPOT_COORDS[1];
-
-                statusMsg.innerText = "Status: Calculating OSRM route...";
-
-                // 2. Fetch OSRM driving route
                 const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
                 const routeRes = await fetch(osrmUrl);
                 const routeData = await routeRes.json();
@@ -1602,24 +1621,20 @@
                     return alert("No navigable driving route found.");
                 }
 
-                const routeCoords = routeData.routes[0].geometry.coordinates; // [ [lng, lat], ... ]
+                const routeCoords = routeData.routes[0].geometry.coordinates;
 
-                // Draw route on map
                 if (activeRouteLayer) map.removeLayer(activeRouteLayer);
                 activeRouteLayer = L.geoJSON(routeData.routes[0].geometry, {
                     style: { color: '#38bdf8', weight: 6, opacity: 0.9, dashArray: '1, 6', lineCap: 'round' }
                 }).addTo(map);
                 map.fitBounds(activeRouteLayer.getBounds(), { padding: [45, 45] });
 
-                // 3. Intersect Hazards with Route Polyline (within 35 meters)
                 let onRouteCount = 0;
                 allPotholes.forEach(p => {
                     let minDistanceToRoute = 999999;
                     routeCoords.forEach(coord => {
                         const dist = computeHaversineMeters(p.lat, p.lng, coord[1], coord[0]);
-                        if (dist < minDistanceToRoute) {
-                            minDistanceToRoute = dist;
-                        }
+                        if (dist < minDistanceToRoute) minDistanceToRoute = dist;
                     });
 
                     if (minDistanceToRoute <= 35.0) {
