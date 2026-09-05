@@ -255,7 +255,7 @@
         .pulse-core {
             width: 14px;
             height: 14px;
-            background-color: #7f1d1d; /* Deep crimson */
+            background-color: #7f1d1d;
             border: 2px solid #ffffff;
             border-radius: 50%;
             position: absolute;
@@ -269,8 +269,8 @@
         .pulse-wave {
             width: 16px;
             height: 16px;
-            background-color: rgba(153, 27, 27, 0.95); /* Heavy dark crimson */
-            border: 2px solid #7f1d1d; /* Dark red perimeter */
+            background-color: rgba(153, 27, 27, 0.95);
+            border: 2px solid #7f1d1d;
             border-radius: 50%;
             position: absolute;
             top: 50%;
@@ -879,7 +879,7 @@
             cursor: pointer;
         }
 
-        /* --- DRIVER PROXIMITY ACOUSTIC ALERT HUD --- */
+        /* --- DRIVER PROXIMITY ACOUSTIC & ADVISORY ALERT HUD --- */
         #driver-warning-banner {
             display: none;
             position: fixed;
@@ -1030,7 +1030,7 @@
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-val" id="count-active">12</div>
-                <div class="stat-lbl">Active Potholes</div>
+                <div class="stat-lbl">Active Hazards</div>
             </div>
             <div class="stat-card resolved-card">
                 <div class="stat-val resolved-val" id="count-resolved">4</div>
@@ -1064,7 +1064,6 @@
             <h2>🛡️ Municipal 2FA Gate</h2>
             <p id="modalSubtitle">Enter officer credentials to dispatch an SMS verification code.</p>
             
-            <!-- Step 1: Credentials Form (iOS WebKit Safe) -->
             <form id="credForm" onsubmit="event.preventDefault(); handleCredSubmit(event); return false;">
                 <div class="form-group">
                     <label>Admin Identifier</label>
@@ -1077,7 +1076,6 @@
                 <button type="button" id="btnCred" class="btn-login" onclick="handleCredSubmit(event)">Send Verification SMS</button>
             </form>
 
-            <!-- Step 2: 6-Digit SMS Verification Form -->
             <form id="otpForm" onsubmit="event.preventDefault(); handleOtpSubmit(event); return false;" style="display: none;">
                 <div class="form-group">
                     <label>6-Digit Verification Code</label>
@@ -1163,7 +1161,7 @@
 
             <div id="chatMessages">
                 <div class="chat-msg bot">
-                    👋 <b>Hello Officer!</b> Ask me about active potholes, material requisitions, or our speed-bump filtering logic.
+                    👋 <b>Hello Officer!</b> Ask me about active potholes, material requisitions, or our speed-breaker filtering logic.
                 </div>
             </div>
 
@@ -1178,7 +1176,6 @@
         // --- BUFFER GATE: Suppresses all proximity audio/alerts during boot ---
         let isSystemArmed = false;
 
-        // --- 6-SECOND HARD-LOCKED SPLASH DISMISSAL ---
         function triggerFadeOut() {
             const loader = document.getElementById("aikya-loader");
             if (!loader) {
@@ -1215,10 +1212,9 @@
 
         setTimeout(() => {
             const status = document.getElementById("loaderStatusText");
-            if (status) status.innerText = "SYNCHRONIZING PWD DEFECT MANIFEST...";
+            if (status) status.innerText = "SYNCHRONIZING PWD DEFECT & SPEED BREAKER MANIFEST...";
         }, 4200);
 
-        // --- Admin Authentication Controller (SMS 2FA) ---
         let pendingAction = null;
         let activeAdminUsername = "";
 
@@ -1439,6 +1435,7 @@
         }
 
         function getMarkerColor(p) {
+            if (p.type === 'speed_breaker') return '#f59e0b';
             if (p.status === 'resolved') return '#10b981';
             if (p.severity === 'high') return '#7f1d1d';
             if (p.severity === 'medium') return '#f59e0b';
@@ -1449,7 +1446,7 @@
             if (!allPotholes || allPotholes.length === 0) return;
 
             const heatPoints = allPotholes
-                .filter(p => p.status !== 'resolved')
+                .filter(p => p.status !== 'resolved' && p.type !== 'speed_breaker')
                 .map(p => {
                     const intensity = p.severity === 'high' ? 1.0 : (p.severity === 'medium' ? 0.65 : 0.35);
                     return [p.lat, p.lng, intensity];
@@ -1482,12 +1479,12 @@
                 if (!res.ok) throw new Error("API Offline");
                 allPotholes = await res.json();
             } catch (err) {
-                console.error("Using localized corridor manifest:", err);
+                console.error("Using localized corridor manifest with Speed Breakers:", err);
                 allPotholes = [
-                    { id: 1, lat: 12.82310, lng: 80.04510, severity: "high", status: "pending", hit_count: 9 },
-                    { id: 2, lat: 12.82450, lng: 80.04280, severity: "medium", status: "pending", hit_count: 4 },
-                    { id: 3, lat: 12.82180, lng: 80.04750, severity: "low", status: "pending", hit_count: 2 },
-                    { id: 4, lat: 12.82620, lng: 80.04400, severity: "low", status: "resolved", hit_count: 14 }
+                    { id: 1, lat: 12.82310, lng: 80.04510, severity: "high", type: "pothole", status: "pending", hit_count: 9 },
+                    { id: 2, lat: 12.82450, lng: 80.04280, severity: "medium", type: "pothole", status: "pending", hit_count: 4 },
+                    { id: 3, lat: 12.82180, lng: 80.04750, severity: "low", type: "speed_breaker", status: "pending", hit_count: 22 }, // Mapped Speed Breaker
+                    { id: 4, lat: 12.82620, lng: 80.04400, severity: "low", type: "pothole", status: "resolved", hit_count: 14 }
                 ];
             }
             renderDashboard();
@@ -1511,8 +1508,17 @@
                 else activeCount++;
 
                 const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat.toFixed(5)},${p.lng.toFixed(5)}&travelmode=driving&dir_action=navigate`;
+                const isSpeedBreaker = (p.type === 'speed_breaker');
 
-                const popupHtml = `
+                const popupHtml = isSpeedBreaker ? `
+                    <div style="min-width: 190px;">
+                        <div class="popup-title" style="color: #f59e0b;">⚡ Speed Breaker Hump</div>
+                        <div class="popup-row">Crossed By: <b>${p.hit_count} vehicles</b></div>
+                        <div class="popup-row">Status: <b>ADVISORY MAPPED</b></div>
+                        <div class="popup-row">Coords: <code>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</code></div>
+                        <button class="btn-popup btn-gmaps-pop" onclick="requestAdminAction(() => window.open('${gmapsUrl}', '_blank'))">🗺️ Open in Google Maps</button>
+                    </div>
+                ` : `
                     <div style="min-width: 190px;">
                         <div class="popup-title">Defect #${p.id} (${p.severity.toUpperCase()})</div>
                         <div class="popup-row">Sensor Hits: <b>${p.hit_count} vehicles</b></div>
@@ -1524,11 +1530,19 @@
                     </div>
                 `;
 
-                const isCritical = (p.severity === 'high' && p.status !== 'resolved');
+                const isCritical = (p.severity === 'high' && p.status !== 'resolved' && !isSpeedBreaker);
 
                 if (!markers[p.id]) {
                     let marker;
-                    if (isCritical) {
+                    if (isSpeedBreaker) {
+                        const sbIcon = L.divIcon({
+                            html: `<div style="background:#f59e0b; color:#000; border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border:2px solid white; font-size:11px; font-weight:800; box-shadow:0 0 10px rgba(245, 158, 11, 0.8);">⚡</div>`,
+                            className: 'speed-breaker-pin',
+                            iconSize: [22, 22],
+                            iconAnchor: [11, 11]
+                        });
+                        marker = L.marker([p.lat, p.lng], { icon: sbIcon }).addTo(map);
+                    } else if (isCritical) {
                         const blinkingIcon = L.divIcon({
                             className: 'high-defect-blinking',
                             html: '<div class="pulse-wave"></div><div class="pulse-core"></div>',
@@ -1550,7 +1564,7 @@
                     marker.bindPopup(popupHtml);
                     markers[p.id] = marker;
                 } else {
-                    if (markers[p.id].setStyle) {
+                    if (markers[p.id].setStyle && !isSpeedBreaker) {
                         markers[p.id].setStyle({ fillColor: getMarkerColor(p) });
                     }
                 }
@@ -1572,12 +1586,16 @@
 
             filtered.forEach(p => {
                 const item = document.createElement('div');
-                item.className = `ticket ${p.status === 'resolved' ? 'resolved' : p.severity}`;
+                const isSpeedBreaker = (p.type === 'speed_breaker');
+                item.className = `ticket ${isSpeedBreaker ? 'medium' : (p.status === 'resolved' ? 'resolved' : p.severity)}`;
                 
                 let badgeClass = 'badge-low';
                 let badgeText = 'LOW RISK';
 
-                if (p.status === 'resolved') {
+                if (isSpeedBreaker) {
+                    badgeClass = 'badge-medium';
+                    badgeText = 'SPEED BREAKER';
+                } else if (p.status === 'resolved') {
                     badgeClass = 'badge-resolved';
                     badgeText = 'RESOLVED';
                 } else if (p.severity === 'high') {
@@ -1590,11 +1608,11 @@
 
                 item.innerHTML = `
                     <div class="ticket-head">
-                        <span>Defect #${p.id} (${p.severity.toUpperCase()})</span>
+                        <span>${isSpeedBreaker ? '⚡ Speed Breaker #' + p.id : 'Defect #' + p.id + ' (' + p.severity.toUpperCase() + ')'}</span>
                         <span class="badge ${badgeClass}">${badgeText}</span>
                     </div>
                     <div class="ticket-body">
-                        Hits Recorded: <b>${p.hit_count} vehicles</b>
+                        ${isSpeedBreaker ? 'Crossings Recorded' : 'Hits Recorded'}: <b>${p.hit_count} vehicles</b>
                         <div class="coords-line">
                             📍 ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}
                         </div>
@@ -1616,7 +1634,7 @@
 
         window.openPlaybook = function(id) {
             const p = allPotholes.find(item => item.id === id);
-            if (!p) return;
+            if (!p || p.type === 'speed_breaker') return;
 
             document.getElementById('modal-title').innerText = `Work Order Incident Playbook #PWD-${String(p.id).padStart(4, '0')}`;
             document.getElementById('modal-coords').innerText = `Coordinates: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} • SRM Kattankulathur Sector`;
@@ -1675,7 +1693,11 @@
                 let action = "Surface Leveling";
                 let material = "Cold Mix Asphalt (0.5 Bag)";
 
-                if (p.severity === 'high') {
+                if (p.type === 'speed_breaker') {
+                    priority = "ADVISORY (Hump)";
+                    action = "Signage & Marking Maintenance";
+                    material = "Thermoplastic Paint";
+                } else if (p.severity === 'high') {
                     priority = "CRITICAL (Immediate)";
                     action = "Deep Mill & Hot Fill";
                     material = "Bituminous Concrete (2.5 Bags)";
@@ -1685,7 +1707,7 @@
                     material = "Dense Aggregate + Rapid Patch";
                 }
 
-                if (p.status === 'resolved') {
+                if (p.status === 'resolved' && p.type !== 'speed_breaker') {
                     priority = "COMPLETED";
                     action = "No Action Required";
                     material = "None (Auto-Verified)";
@@ -1693,9 +1715,10 @@
 
                 return {
                     "Work Order ID": `PWD-DEF-${String(p.id).padStart(4, '0')}`,
-                    "Defect Priority": priority,
+                    "Infrastructure Type": p.type === 'speed_breaker' ? 'Speed Breaker Hump' : 'Pothole Defect',
+                    "Priority / Class": priority,
                     "Status": p.status.toUpperCase(),
-                    "Vehicle Hits": `${p.hit_count} vehicles`,
+                    "Sensor Crossings": `${p.hit_count} vehicles`,
                     "Latitude": parseFloat(p.lat.toFixed(5)),
                     "Longitude": parseFloat(p.lng.toFixed(5)),
                     "Corridor Zone": "SRM Kattankulathur",
@@ -1708,9 +1731,8 @@
 
             const ws = XLSX.utils.json_to_sheet(excelData);
             ws['!cols'] = [
-                { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 14 },
-                { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 26 },
-                { wch: 34 }, { wch: 20 }, { wch: 80 }
+                { wch: 16 }, { wch: 20 }, { wch: 22 }, { wch: 14 }, { wch: 14 },
+                { wch: 12 }, { wch: 12 }, { wch: 24 }, { wch: 26 }, { wch: 34 }, { wch: 20 }, { wch: 80 }
             ];
 
             const wb = XLSX.utils.book_new();
@@ -1791,6 +1813,7 @@
             window.addEventListener(evt, () => ensureAudioContext(), { once: true, passive: true });
         });
 
+        // Critical Pothole Warning Alarm (Harsh dual-tone buzzer)
         function playHazardBeep(severity = 'high') {
             ensureAudioContext();
             if (!audioCtx) return;
@@ -1803,13 +1826,21 @@
 
             for (let i = 0; i < totalPulses; i++) {
                 const startTime = i * interval;
-                playCabinAlarmPulse(tone1, tone2, startTime);
+                playCabinAlarmPulse(tone1, tone2, startTime, 0.12);
             }
         }
 
-        function playCabinAlarmPulse(f1, f2, delay) {
+        // Gentle Speed Breaker Advisory Chime (Soft double-beep)
+        function playAdvisoryChime() {
+            ensureAudioContext();
+            if (!audioCtx) return;
+
+            playCabinAlarmPulse(523.25, 659.25, 0.0, 0.15); // C5 to E5
+            playCabinAlarmPulse(523.25, 659.25, 0.22, 0.15);
+        }
+
+        function playCabinAlarmPulse(f1, f2, delay, pulseLength) {
             const t0 = audioCtx.currentTime + delay;
-            const pulseLength = 0.12;
 
             const oscSquare = audioCtx.createOscillator();
             const oscTri = audioCtx.createOscillator();
@@ -1822,8 +1853,8 @@
             oscTri.frequency.setValueAtTime(f2, t0);
 
             gain.gain.setValueAtTime(0.001, t0);
-            gain.gain.linearRampToValueAtTime(0.85, t0 + 0.015);
-            gain.gain.setValueAtTime(0.85, t0 + pulseLength - 0.02);
+            gain.gain.linearRampToValueAtTime(0.75, t0 + 0.015);
+            gain.gain.setValueAtTime(0.75, t0 + pulseLength - 0.02);
             gain.gain.exponentialRampToValueAtTime(0.001, t0 + pulseLength);
 
             oscSquare.connect(gain);
@@ -1846,12 +1877,30 @@
             ]);
         }
 
-        function displayHazardBanner(distance) {
+        function triggerAdvisoryHaptic() {
+            if (!navigator.vibrate) return;
+            navigator.vibrate([150, 100, 150]); // Short double pulse for speed breaker
+        }
+
+        function displayHazardBanner(distance, customText = null, customBg = null, customBorder = null) {
             const banner = document.getElementById('driver-warning-banner');
             const distText = document.getElementById('hazard-distance');
             if (!banner) return;
 
             distText.innerText = Math.round(distance);
+            
+            if (customText) {
+                banner.innerHTML = `${customText}: <span id="hazard-distance">${Math.round(distance)}</span>m AWAY`;
+            } else {
+                banner.innerHTML = `⚠️ ROAD HAZARD AHEAD: <span id="hazard-distance">${Math.round(distance)}</span>m AWAY`;
+            }
+
+            if (customBg) banner.style.background = customBg;
+            else banner.style.background = '#7f1d1d';
+
+            if (customBorder) banner.style.border = `2px solid ${customBorder}`;
+            else banner.style.border = '2px solid #ef4444';
+
             banner.style.display = 'block';
 
             setTimeout(() => {
@@ -1878,22 +1927,30 @@
             if (!allPotholes || !allPotholes.length) return;
 
             allPotholes.forEach(p => {
-                if (p.status === 'resolved') return;
+                if (p.status === 'resolved' && p.type !== 'speed_breaker') return;
 
                 const distance = computeHaversineMeters(currentLat, currentLng, p.lat, p.lng);
+                const isSpeedBreaker = (p.type === 'speed_breaker');
+                const alertRadius = isSpeedBreaker ? 40.0 : ALERT_RADIUS_METERS;
 
-                if (distance <= ALERT_RADIUS_METERS) {
+                if (distance <= alertRadius) {
                     if (!alertedPotholes.has(p.id)) {
                         alertedPotholes.add(p.id);
 
-                        if (audioCtx && audioCtx.state === 'running') {
-                            playHazardBeep(p.severity);
+                        if (isSpeedBreaker) {
+                            playAdvisoryChime();
+                            triggerAdvisoryHaptic();
+                            displayHazardBanner(distance, "⚡ SPEED BREAKER HUMP", "#b45309", "#f59e0b");
                         } else {
-                            ensureAudioContext().then(() => playHazardBeep(p.severity));
+                            if (audioCtx && audioCtx.state === 'running') {
+                                playHazardBeep(p.severity);
+                            } else {
+                                ensureAudioContext().then(() => playHazardBeep(p.severity));
+                            }
+                            triggerHapticFeedback();
+                            displayHazardBanner(distance);
                         }
 
-                        triggerHapticFeedback();
-                        displayHazardBanner(distance);
                         setTimeout(() => alertedPotholes.delete(p.id), 45000);
                     }
                 }
