@@ -850,7 +850,7 @@
             cursor: pointer;
         }
 
-        /* --- DRIVER PROXIMITY ACOUSTIC ALERT HUD --- */
+        /* --- DRIVER PROXIMITY ACOUSTIC ALERT HUD (Optimized for Mobile & Desktop) --- */
         #driver-warning-banner {
             display: none;
             position: fixed;
@@ -878,18 +878,18 @@
 
         .proximity-test-btn {
             position: fixed;
-            bottom: 24px;
-            left: 24px;
-            z-index: 9999;
+            top: 20px;
+            left: 20px;
+            z-index: 100000;
             background: #0284c7;
             color: #ffffff;
             border: 1px solid #38bdf8;
-            padding: 9px 15px;
-            border-radius: 6px;
-            font-size: 12px;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 13px;
             font-weight: 700;
             cursor: pointer;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.6);
             transition: 0.15s ease;
         }
         .proximity-test-btn:hover {
@@ -899,7 +899,12 @@
 
         @media (max-width: 768px) {
             .desktop-toggle-btn { display: none !important; }
-            .proximity-test-btn { bottom: 80px; left: 16px; font-size: 11px; padding: 7px 11px; }
+            .proximity-test-btn { 
+                top: 16px; 
+                left: 16px; 
+                font-size: 11px; 
+                padding: 8px 12px; 
+            }
             .glass-panel {
                 top: auto; left: 0; right: 0; bottom: 0;
                 width: 100%; max-height: 75vh;
@@ -1834,7 +1839,7 @@
         }
 
         function checkProximityToPotholes(currentLat, currentLng) {
-            // BUFFER GATE: Do not evaluate proximity while splash screen is active
+            // BUFFER GATE: Suppress proximity checks until splash screen finishes booting
             if (!isSystemArmed) return;
 
             if (!driverMarker) {
