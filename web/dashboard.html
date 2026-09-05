@@ -297,19 +297,48 @@
             }
         }
 
-        /* Live Driver Probe Marker */
+        /* Live Driver Probe Marker & Hardware Vibration Node Pulse */
         .driver-node-icon {
             position: relative;
             background: transparent;
             border: none;
         }
         .driver-dot {
-            width: 14px;
-            height: 14px;
+            width: 16px;
+            height: 16px;
             background: #38bdf8;
             border: 2.5px solid #ffffff;
             border-radius: 50%;
-            box-shadow: 0 0 12px #38bdf8;
+            box-shadow: 0 0 16px #38bdf8;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+        }
+        .driver-vibe-wave {
+            width: 22px;
+            height: 22px;
+            background-color: rgba(56, 189, 248, 0.4);
+            border: 1.5px solid #38bdf8;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: driverVibePulse 1.4s ease-out infinite;
+            z-index: 1;
+        }
+
+        @keyframes driverVibePulse {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.9;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(3.0);
+                opacity: 0;
+            }
         }
 
         /* Floating Command Panel */
@@ -850,7 +879,7 @@
             cursor: pointer;
         }
 
-        /* --- DRIVER PROXIMITY ACOUSTIC ALERT HUD (Optimized for Mobile & Desktop) --- */
+        /* --- DRIVER PROXIMITY ACOUSTIC ALERT HUD --- */
         #driver-warning-banner {
             display: none;
             position: fixed;
@@ -1169,20 +1198,16 @@
                 if (typeof map !== "undefined" && map.invalidateSize) {
                     map.invalidateSize();
                 }
-                // ARM PROXIMITY SYSTEM: Proximity alerts only begin now that map is visible
                 isSystemArmed = true;
             }, 600);
         }
 
-        // Hard dismiss at exactly 6000ms
         setTimeout(triggerFadeOut, 6000);
 
-        // Fallback: dismiss if window finishes loading and safety timer fires
         window.addEventListener("load", () => {
             setTimeout(triggerFadeOut, 6200);
         });
 
-        // Dynamic status updates
         setTimeout(() => {
             const status = document.getElementById("loaderStatusText");
             if (status) status.innerText = "CALIBRATING ACCELEROMETER MAPPING...";
@@ -1222,7 +1247,6 @@
             pendingAction = null;
         }
 
-        // Step 1: Submit Username & Password -> Dispatches SMS
         async function handleCredSubmit(e) {
             if (e) {
                 if (typeof e.preventDefault === "function") e.preventDefault();
@@ -1295,7 +1319,6 @@
             }
         }
 
-        // Step 2: Submit 6-Digit OTP -> Authorizes and Stores Token
         async function handleOtpSubmit(e) {
             if (e) {
                 if (typeof e.preventDefault === "function") e.preventDefault();
@@ -1381,7 +1404,6 @@
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
 
-        // Initialize directly with satelliteMap as default
         const map = L.map('map', { 
             zoomControl: false, 
             layers: [satelliteMap] 
@@ -1418,7 +1440,7 @@
 
         function getMarkerColor(p) {
             if (p.status === 'resolved') return '#10b981';
-            if (p.severity === 'high') return '#7f1d1d'; /* Deep crimson */
+            if (p.severity === 'high') return '#7f1d1d';
             if (p.severity === 'medium') return '#f59e0b';
             return '#38bdf8';
         }
@@ -1769,7 +1791,6 @@
             window.addEventListener(evt, () => ensureAudioContext(), { once: true, passive: true });
         });
 
-        // High-volume 3.5s rapid automotive safety alarm sequence
         function playHazardBeep(severity = 'high') {
             ensureAudioContext();
             if (!audioCtx) return;
@@ -1777,8 +1798,8 @@
             const tone1 = severity === 'high' ? 880 : 740;
             const tone2 = severity === 'high' ? 1760 : 1480;
 
-            const totalPulses = 14;      // ~3.5 seconds
-            const interval = 0.25;       // 250ms interval
+            const totalPulses = 14;      
+            const interval = 0.25;       
 
             for (let i = 0; i < totalPulses; i++) {
                 const startTime = i * interval;
@@ -1839,18 +1860,17 @@
         }
 
         function checkProximityToPotholes(currentLat, currentLng) {
-            // BUFFER GATE: Suppress proximity checks until splash screen finishes booting
             if (!isSystemArmed) return;
 
             if (!driverMarker) {
                 const driverIcon = L.divIcon({
                     className: 'driver-node-icon',
-                    html: '<div class="driver-dot"></div>',
-                    iconSize: [14, 14],
-                    iconAnchor: [7, 7]
+                    html: '<div class="driver-vibe-wave"></div><div class="driver-dot"></div>',
+                    iconSize: [22, 22],
+                    iconAnchor: [11, 11]
                 });
                 driverMarker = L.marker([currentLat, currentLng], { icon: driverIcon, zIndexOffset: 1000 }).addTo(map);
-                driverMarker.bindTooltip("You (Telemetry Node)", { permanent: false, direction: "top" });
+                driverMarker.bindTooltip("You (Hardware Vibe Node)", { permanent: false, direction: "top" });
             } else {
                 driverMarker.setLatLng([currentLat, currentLng]);
             }
@@ -1888,7 +1908,6 @@
             });
         }
 
-        // Live Automatic Geolocation Watcher & Instant Proximity Scanner
         let lastKnownCoords = null;
 
         if (navigator.geolocation) {
@@ -1906,7 +1925,6 @@
             );
         }
 
-        // Fast-polling loop (checks 5 times per second to eliminate alert latency)
         setInterval(() => {
             if (lastKnownCoords) {
                 checkProximityToPotholes(lastKnownCoords.latitude, lastKnownCoords.longitude);
